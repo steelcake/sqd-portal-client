@@ -109,7 +109,7 @@ impl Client {
         let bytes = res.bytes().await.context("read response body bytes")?;
 
         let data = std::str::from_utf8(&bytes).unwrap();
-        
+
         println!("{}", data);
 
         todo!()

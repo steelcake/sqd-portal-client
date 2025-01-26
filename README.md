@@ -1,6 +1,8 @@
-# cherry-core
+# sqd-portal-client 
 
-Core libraries for `cherry` blockchain data pipeline framework.
+This repo contains rust and python clients for querying SQD portals.
+
+This project is sponsored by [SQD](https://sqd.dev)
 
 ## License
 
