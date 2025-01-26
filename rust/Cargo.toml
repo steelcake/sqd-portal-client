@@ -1,0 +1,15 @@
+[package]
+name = "sqd-portal-client"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+arrow = { workspace = true }
+cherry-evm-schema = { workspace = true }
+
+[dependencies.reqwest]
+version = "0.12"
+default-features = false
+features = ["json", "rustls-tls", "gzip"]
+

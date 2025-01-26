@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = [
+  "rust",
+  "python",
+]
+
+[workspace.dependencies]
+arrow = "54"
+ruint = "1"
+anyhow = "1"
+log = "0.4"
+cherry-evm-schema = "0.0.1"
