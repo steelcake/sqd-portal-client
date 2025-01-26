@@ -1,8 +1,11 @@
 use std::{collections::BTreeMap, time::Duration};
 
+use anyhow::{Context, Result};
 use arrow::array::RecordBatch;
 use reqwest::{Client as HttpClient, Url};
-use anyhow::{Result, Context};
+use serde::Serialize;
+
+pub mod evm;
 
 pub struct ClientConfig {
     pub url: Url,
@@ -16,7 +19,7 @@ pub struct ClientConfig {
 impl Default for ClientConfig {
     fn default() -> Self {
         Self {
-            url: "https://portal.sqd.dev/datasets"
+            url: "https://portal.sqd.dev/datasets/ethereum-mainnet"
                 .parse()
                 .unwrap(),
             max_num_retries: 9,
@@ -55,11 +58,11 @@ impl Client {
         }
     }
 
-    pub fn finalized_query(query: &Query) -> Result<Vec<(String, RecordBatch)>> {
+    pub fn finalized_query<Q: Serialize, R: Response>(query: &Q) -> Result<R> {
         todo!()
     }
 
-    // pub fn finalized_stream(query: &Query, config: &StreamConfig) -> Result<FinalizedStream> {
+    // pub fn finalized_stream(query: &EvmQuery, config: &StreamConfig) -> Result<FinalizedStream<EvmResponse>> {
     //     todo!()
     // }
 }
@@ -68,21 +71,4 @@ impl Client {
 
 // }
 
-pub struct Query {
-    from_block: u64,
-    to_block: Option<u64>,
-    include_all_blocks: bool,
-    fields: Vec<(String, Vec<String>)>,
-}
-
-impl Default for Query {
-    fn default() -> Self {
-        Self {
-            from_block: 0,
-            to_block: None,
-            include_all_blocks: false,
-            fields: Vec::new(),
-        }
-    }
-}
-
+trait Response {}
