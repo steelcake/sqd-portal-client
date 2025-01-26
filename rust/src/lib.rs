@@ -88,8 +88,7 @@ impl Client {
     async fn finalized_query_impl<Q: Serialize, R: Response>(&self, query: &Q) -> Result<R> {
         let mut url = self.url.clone();
         let mut segments = url.path_segments_mut().ok().context("get path segments")?;
-        segments.push("query");
-        segments.push("arrow-ipc");
+        segments.push("finalized-stream");
         std::mem::drop(segments);
         let req = self.http_client.request(Method::POST, url);
 
@@ -125,3 +124,26 @@ impl Client {
 // }
 
 trait Response {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn dummy() {
+        let client = Client::new(ClientConfig::default());
+
+        let query = evm::Query {
+            from_block: 0,
+            to_block: Some(5),
+            ..Default::default()
+        };
+
+        println!("{}", serde_json::to_string_pretty(&query).unwrap());
+
+        client
+            .finalized_query::<_, evm::Response>(&query)
+            .await
+            .unwrap();
+    }
+}

@@ -18,3 +18,6 @@ version = "0.12"
 default-features = false
 features = ["json", "rustls-tls", "gzip"]
 
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"]}
+
