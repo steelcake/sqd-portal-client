@@ -1,8 +1,7 @@
-use std::{collections::BTreeMap, time::Duration};
+use std::time::Duration;
 
-use anyhow::{Context, Result};
-use arrow::array::RecordBatch;
-use reqwest::{Client as HttpClient, Url};
+use anyhow::{anyhow, Context, Result};
+use reqwest::{Client as HttpClient, Method, Url};
 use serde::Serialize;
 
 pub mod evm;
@@ -58,7 +57,61 @@ impl Client {
         }
     }
 
-    pub fn finalized_query<Q: Serialize, R: Response>(query: &Q) -> Result<R> {
+    pub async fn finalized_query<Q: Serialize, R: Response>(&self, query: &Q) -> Result<R> {
+        let mut base = self.retry_base_ms;
+
+        let mut err = anyhow!("");
+
+        for _ in 0..self.max_num_retries + 1 {
+            match self.finalized_query_impl::<Q, R>(query).await {
+                Ok(res) => return Ok(res),
+                Err(e) => {
+                    log::error!(
+                        "failed to get data from server, retrying... The error was: {:?}",
+                        e
+                    );
+                    err = err.context(format!("{:?}", e));
+                }
+            }
+
+            let base_ms = Duration::from_millis(base);
+            let jitter = Duration::from_millis(rand::random::<u64>() % self.retry_backoff_ms);
+
+            tokio::time::sleep(base_ms + jitter).await;
+
+            base = std::cmp::min(base + self.retry_backoff_ms, self.retry_ceiling_ms);
+        }
+
+        Err(err)
+    }
+
+    async fn finalized_query_impl<Q: Serialize, R: Response>(&self, query: &Q) -> Result<R> {
+        let mut url = self.url.clone();
+        let mut segments = url.path_segments_mut().ok().context("get path segments")?;
+        segments.push("query");
+        segments.push("arrow-ipc");
+        std::mem::drop(segments);
+        let req = self.http_client.request(Method::POST, url);
+
+        let res = req.json(&query).send().await.context("execute http req")?;
+
+        let status = res.status();
+        if !status.is_success() {
+            let text = res.text().await.context("read text to see error")?;
+
+            return Err(anyhow!(
+                "http response status code {}, err body: {}",
+                status,
+                text
+            ));
+        }
+
+        let bytes = res.bytes().await.context("read response body bytes")?;
+
+        let data = std::str::from_utf8(&bytes).unwrap();
+        
+        println!("{}", data);
+
         todo!()
     }
 

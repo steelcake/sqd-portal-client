@@ -9,6 +9,9 @@ arrow = { workspace = true }
 cherry-evm-schema = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+log = { workspace = true }
+rand = { workspace = true } 
+tokio = { workspace = true }
 
 [dependencies.reqwest]
 version = "0.12"
