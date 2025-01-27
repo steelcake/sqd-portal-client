@@ -42,7 +42,7 @@ pub struct Client {
 impl Client {
     pub fn new(config: ClientConfig) -> Self {
         let http_client = HttpClient::builder()
-            .gzip(true)
+            .gzip(false)
             .timeout(Duration::from_millis(config.http_req_timeout_millis))
             .build()
             .unwrap();
@@ -109,7 +109,7 @@ impl Client {
 
         let data = std::str::from_utf8(&bytes).unwrap();
 
-        println!("{}", data);
+        println!("Data: {}", data);
 
         todo!()
     }
@@ -134,10 +134,51 @@ mod tests {
         let client = Client::new(ClientConfig::default());
 
         let query = evm::Query {
-            from_block: 0,
-            to_block: Some(5),
+            from_block: 21718704,
+            logs: vec![evm::LogRequest {
+                address: vec!["0xae78736Cd615f374D3085123A210448E74Fc6393".to_lowercase()],
+                transaction: true,
+                transaction_traces: true,
+                ..Default::default()
+            }],
+            fields: evm::Fields {
+                log: evm::LogFields {
+                    address: true,
+                    ..Default::default()
+                },
+                block: evm::BlockFields {
+                    number: true,
+                    timestamp: true,
+                    difficulty: true,
+                    size: true,
+                    gas_limit: true,
+                    ..Default::default()
+                },
+                trace: evm::TraceFields {
+                    transaction_index: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
             ..Default::default()
         };
+
+        dbg!(&query);
+
+        // let query: evm::Query = serde_json::from_value(serde_json::json!({
+        //     "from_block": 20123123,
+        //     "transactions": [
+        //         {
+        //             "from": ""
+        //         }
+        //     ],
+        //     "fields": {
+        //         "transaction": {
+        //             "from": true,
+        //             "to": true,
+        //         }
+        //     }
+        // })).unwrap();
 
         println!("{}", serde_json::to_string_pretty(&query).unwrap());
 
