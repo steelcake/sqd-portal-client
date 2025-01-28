@@ -1,3 +1,5 @@
+use anyhow::{anyhow, Context, Result};
+use arrow::{array::RecordBatch, ipc::RecordBatch};
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -226,6 +228,24 @@ pub struct BlockFields {
     pub l1_block_number: bool,
 }
 
-pub struct Response {}
+pub struct ArrowResponse {
+    pub blocks: RecordBatch,
+    pub transactions: RecordBatch,
+    pub logs: RecordBatch,
+    pub traces: RecordBatch,
+    // state_diffs: recordbatch,
+}
 
-impl crate::Response for Response {}
+#[derive(Default)]
+pub struct ArrowResponseParser {
+    // this is to disallow initializing this struct like ResponseParser {} outside of this library
+    _unused: bool,
+}
+
+impl crate::ResponseParser for ArrowResponseParser {
+    type Output = ArrowResponse;
+
+    fn parse(&self, bytes: &[u8]) -> Result<ArrowResponse> {
+        todo!()
+    }
+}

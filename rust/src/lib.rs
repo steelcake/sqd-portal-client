@@ -7,7 +7,6 @@ use serde::Serialize;
 pub mod evm;
 
 pub struct ClientConfig {
-    pub url: Url,
     pub max_num_retries: usize,
     pub retry_backoff_ms: u64,
     pub retry_base_ms: u64,
@@ -18,9 +17,6 @@ pub struct ClientConfig {
 impl Default for ClientConfig {
     fn default() -> Self {
         Self {
-            url: "https://portal.sqd.dev/datasets/ethereum-mainnet"
-                .parse()
-                .unwrap(),
             max_num_retries: 9,
             retry_backoff_ms: 1000,
             retry_base_ms: 250,
@@ -40,7 +36,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(config: ClientConfig) -> Self {
+    pub fn new(url: Url, config: ClientConfig) -> Self {
         let http_client = HttpClient::builder()
             .gzip(false)
             .timeout(Duration::from_millis(config.http_req_timeout_millis))
@@ -49,7 +45,7 @@ impl Client {
 
         Self {
             http_client,
-            url: config.url,
+            url,
             max_num_retries: config.max_num_retries,
             retry_backoff_ms: config.retry_backoff_ms,
             retry_base_ms: config.retry_base_ms,
@@ -57,13 +53,17 @@ impl Client {
         }
     }
 
-    pub async fn finalized_query<Q: Serialize, R: Response>(&self, query: &Q) -> Result<R> {
+    pub async fn finalized_query<Q: Serialize, R: ResponseParser>(
+        &self,
+        parser: &R,
+        query: &Q,
+    ) -> Result<R::Output> {
         let mut base = self.retry_base_ms;
 
         let mut err = anyhow!("");
 
         for _ in 0..self.max_num_retries + 1 {
-            match self.finalized_query_impl::<Q, R>(query).await {
+            match self.finalized_query_impl::<Q, R>(parser, query).await {
                 Ok(res) => return Ok(res),
                 Err(e) => {
                     log::error!(
@@ -85,7 +85,11 @@ impl Client {
         Err(err)
     }
 
-    async fn finalized_query_impl<Q: Serialize, R: Response>(&self, query: &Q) -> Result<R> {
+    async fn finalized_query_impl<Q: Serialize, R: ResponseParser>(
+        &self,
+        parser: &R,
+        query: &Q,
+    ) -> Result<R::Output> {
         let mut url = self.url.clone();
         let mut segments = url.path_segments_mut().ok().context("get path segments")?;
         segments.push("finalized-stream");
@@ -107,11 +111,9 @@ impl Client {
 
         let bytes = res.bytes().await.context("read response body bytes")?;
 
-        let data = std::str::from_utf8(&bytes).unwrap();
+        let output = parser.parse(&bytes).context("parse response")?;
 
-        println!("Data: {}", data);
-
-        todo!()
+        Ok(output)
     }
 
     // pub fn finalized_stream(query: &EvmQuery, config: &StreamConfig) -> Result<FinalizedStream<EvmResponse>> {
@@ -123,7 +125,11 @@ impl Client {
 
 // }
 
-trait Response {}
+pub trait ResponseParser {
+    type Output;
+
+    fn parse(&self, bytes: &[u8]) -> Result<Self::Output>;
+}
 
 #[cfg(test)]
 mod tests {
@@ -131,7 +137,10 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn dummy() {
-        let client = Client::new(ClientConfig::default());
+        let url = "https://portal.sqd.dev/datasets/ethereum-mainnet"
+            .parse()
+            .unwrap();
+        let client = Client::new(url, ClientConfig::default());
 
         let query = evm::Query {
             from_block: 21718704,
