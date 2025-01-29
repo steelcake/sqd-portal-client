@@ -2,6 +2,11 @@
 name = "sqd-portal-client"
 version = "0.0.1"
 edition = "2021"
+description = "client for querying SQD portals"
+homepage = "https://github.com/steelcake/sqd-portal-client"
+repository = "https://github.com/steelcake/sqd-portal-client"
+authors = ["Ozgur Akkurt <oezgurmakkurt@gmail.com>"]
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -13,6 +18,9 @@ log = { workspace = true }
 rand = { workspace = true } 
 tokio = { workspace = true }
 simd-json = "0.14"
+bytes = "1" 
+faster-hex = "0.10"
+ruint = "1"
 
 [dependencies.reqwest]
 version = "0.12"
