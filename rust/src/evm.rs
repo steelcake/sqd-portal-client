@@ -113,6 +113,7 @@ pub struct Fields {
 #[serde(rename_all = "camelCase")]
 pub struct LogFields {
     pub log_index: bool,
+    pub transaction_index: bool,
     pub transaction_hash: bool,
     pub address: bool,
     pub data: bool,
@@ -253,12 +254,195 @@ impl ArrowResponseParser {
         let header = obj.get("header").context("get header")?;
 
         let header = header.as_object().context("header as object")?;
-        self.parse_header(&header).context("parse header")?;
+        let block_info = self.parse_header(&header).context("parse block header")?;
+
+        self.parse_transactions(&block_info, &obj)
+            .context("parse transactions")?;
+
+        self.parse_logs(&block_info, &obj)
+            .context("parse logs")?;
+
+        // self.parse_traces(&block_info, &obj)
+        //     .context("parse traces")?;
 
         Ok(())
     }
 
-    fn parse_header(&mut self, header: &simd_json::tape::Object<'_, '_>) -> Result<()> {
+    fn parse_logs(&mut self, block_info: &BlockInfo, obj: &simd_json::tape::Object<'_, '_>) -> Result<()> {
+        let logs = match obj.get("logs") {
+            Some(logs) => logs,
+            None => return Ok(()),
+        };
+
+        let logs = logs.as_array().context("logs as array")?;
+
+        for log in logs.iter() {
+            let log = log.as_object().context("log as object")?;
+
+            let log_index = get_tape_u64(&log, "log_index")?;
+            let transaction_index = get_tape_u64(&log, "transaction_index")?;
+            let transaction_hash = get_tape_hex(&log, "transaction_hash")?;
+            let address = get_tape_hex(&log, "address")?;
+            let data = get_tape_hex(&log, "data")?;
+            let topics = get_tape_array_of_hex(&log, "topics")?;
+
+            self.logs.removed.append_null();
+            self.logs.log_index.append_option(log_index);
+            self.logs.transaction_index.append_option(transaction_index);
+            self.logs.transaction_hash.append_option(transaction_hash);
+            self.logs.block_hash.append_option(block_info.hash.clone());
+            self.logs.block_number.append_option(block_info.number);
+            self.logs.address.append_option(address);
+            self.logs.data.append_option(data);
+            if let Some(topics) = topics {
+                self.logs.topic0.append_option(topics.get(0));
+                self.logs.topic0.append_option(topics.get(1));
+                self.logs.topic0.append_option(topics.get(2));
+                self.logs.topic0.append_option(topics.get(3));
+            } else {
+                self.logs.topic0.append_null();
+                self.logs.topic1.append_null();
+                self.logs.topic2.append_null();
+                self.logs.topic3.append_null();
+            }
+        }
+
+        Ok(())
+    }
+
+    fn parse_transactions(
+        &mut self,
+        block_info: &BlockInfo,
+        obj: &simd_json::tape::Object<'_, '_>,
+    ) -> Result<()> {
+        let transactions = match obj.get("transactions") {
+            Some(txs) => txs,
+            None => return Ok(()),
+        };
+
+        let transactions = transactions.as_array().context("transactions as array")?;
+
+        for tx in transactions.iter() {
+            let tx = tx.as_object().context("transaction as object")?;
+
+            let transaction_index = get_tape_u64(&tx, "transaction_index")?;
+            let hash = get_tape_hex(&tx, "hash")?;
+            let nonce = get_tape_i256(&tx, "nonce")?;
+            let from = get_tape_hex(&tx, "from")?;
+            let to = get_tape_hex(&tx, "to")?;
+            let input = get_tape_hex(&tx, "input")?;
+            let value = get_tape_i256(&tx, "value")?;
+            let gas = get_tape_i256(&tx, "gas")?;
+            let gas_price = get_tape_i256(&tx, "gas_price")?;
+            let max_fee_per_gas = get_tape_i256(&tx, "max_fee_per_gas")?;
+            let max_priority_fee_per_gas = get_tape_i256(&tx, "max_priority_fee_per_gas")?;
+            let v = get_tape_i256(&tx, "v")?;
+            let r = get_tape_i256(&tx, "r")?;
+            let s = get_tape_i256(&tx, "s")?;
+            let y_parity = get_tape_u8(&tx, "y_parity")?;
+            let chain_id = get_tape_i256(&tx, "chain_id")?;
+            let sighash = get_tape_hex(&tx, "sighash")?;
+            let contract_address = get_tape_hex(&tx, "contract_address")?;
+            let gas_used = get_tape_i256(&tx, "gas_use")?;
+            let cumulative_gas_used = get_tape_i256(&tx, "cumulative_gas_used")?;
+            let effective_gas_price = get_tape_i256(&tx, "effective_gas_price")?;
+            let type_ = get_tape_u8(&tx, "type")?;
+            let status = get_tape_u8(&tx, "status")?;
+            let max_fee_per_blob_gas = get_tape_i256(&tx, "max_fee_per_blob_gas")?;
+            let blob_versioned_hashes = get_tape_array_of_hex(&tx, "blob_versioned_hashes")?;
+            let l1_fee = get_tape_i256(&tx, "l1_fee")?;
+            let l1_fee_scalar = get_tape_i256(&tx, "l1_fee_scalar")?;
+            let l1_gas_price = get_tape_i256(&tx, "l1_gas_price")?;
+            let l1_gas_used = get_tape_i256(&tx, "l1_gas_used")?;
+            let l1_blob_base_fee = get_tape_i256(&tx, "l1_blob_base_fee")?;
+            let l1_blob_base_fee_scalar = get_tape_i256(&tx, "l1_blob_base_fee_scalar")?;
+            let l1_base_fee_scalar = get_tape_i256(&tx, "l1_base_fee_scalar")?;
+
+            self.transactions
+                .block_hash
+                .append_option(block_info.hash.clone());
+            self.transactions
+                .block_number
+                .append_option(block_info.number.clone());
+            self.transactions.from.append_option(from);
+            self.transactions.gas.append_option(gas);
+            self.transactions.gas_price.append_option(gas_price);
+            self.transactions.hash.append_option(hash);
+            self.transactions.input.append_option(input);
+            self.transactions.nonce.append_option(nonce);
+            self.transactions.to.append_option(to);
+            self.transactions
+                .transaction_index
+                .append_option(transaction_index);
+            self.transactions.value.append_option(value);
+            self.transactions.v.append_option(v);
+            self.transactions.r.append_option(r);
+            self.transactions.s.append_option(s);
+            self.transactions
+                .max_priority_fee_per_gas
+                .append_option(max_priority_fee_per_gas);
+            self.transactions
+                .max_fee_per_gas
+                .append_option(max_fee_per_gas);
+            self.transactions.chain_id.append_option(chain_id);
+            self.transactions
+                .cumulative_gas_used
+                .append_option(cumulative_gas_used);
+            self.transactions
+                .effective_gas_price
+                .append_option(effective_gas_price);
+            self.transactions.gas_used.append_option(gas_used);
+            self.transactions
+                .contract_address
+                .append_option(contract_address);
+            self.transactions.logs_bloom.append_null();
+            self.transactions.type_.append_option(type_);
+            self.transactions.root.append_null();
+            self.transactions.status.append_option(status);
+            self.transactions.sighash.append_option(sighash);
+            self.transactions.y_parity.append_option(y_parity.map(|x| {
+                if x == 1 {
+                    true
+                } else if x == 0 {
+                    false
+                } else {
+                    unreachable!()
+                }
+            }));
+            self.transactions.access_list.0.append_null();
+            self.transactions.l1_fee.append_option(l1_fee);
+            self.transactions.l1_gas_price.append_option(l1_gas_price);
+            self.transactions.l1_gas_used.append_option(l1_gas_used);
+            self.transactions.l1_fee_scalar.append_option(l1_fee_scalar);
+            self.transactions.gas_used_for_l1.append_null();
+            self.transactions
+                .max_fee_per_blob_gas
+                .append_option(max_fee_per_blob_gas);
+            self.transactions
+                .blob_versioned_hashes
+                .append_option(blob_versioned_hashes.map(|v| v.into_iter().map(Some)));
+            self.transactions.deposit_nonce.append_null();
+            self.transactions.blob_gas_price.append_null();
+            self.transactions.deposit_receipt_version.append_null();
+            self.transactions.blob_gas_used.append_null();
+            self.transactions
+                .l1_base_fee_scalar
+                .append_option(l1_base_fee_scalar);
+            self.transactions
+                .l1_blob_base_fee
+                .append_option(l1_blob_base_fee);
+            self.transactions
+                .l1_blob_base_fee_scalar
+                .append_option(l1_blob_base_fee_scalar);
+            self.transactions.l1_block_number.append_null();
+            self.transactions.mint.append_null();
+            self.transactions.source_hash.append_null();
+        }
+
+        Ok(())
+    }
+
+    fn parse_header(&mut self, header: &simd_json::tape::Object<'_, '_>) -> Result<BlockInfo> {
         let number = get_tape_u64(header, "number")?;
         let hash = get_tape_hex(header, "hash")?;
         let parent_hash = get_tape_hex(header, "parentHash")?;
@@ -283,22 +467,28 @@ impl ArrowResponseParser {
         let l1_block_number = get_tape_u64(header, "l1BlockNumber")?;
 
         self.blocks.number.append_option(number);
-        self.blocks.hash.append_option(hash);
+        self.blocks.hash.append_option(hash.clone());
         self.blocks.parent_hash.append_option(parent_hash);
         self.blocks.nonce.append_option(nonce);
         self.blocks.sha3_uncles.append_option(sha3_uncles);
         self.blocks.logs_bloom.append_option(logs_bloom);
-        self.blocks.transactions_root.append_option(transactions_root);
+        self.blocks
+            .transactions_root
+            .append_option(transactions_root);
         self.blocks.state_root.append_option(state_root);
         self.blocks.receipts_root.append_option(receipts_root);
         self.blocks.miner.append_option(miner);
         self.blocks.difficulty.append_option(difficulty);
         self.blocks.total_difficulty.append_option(total_difficulty);
         self.blocks.extra_data.append_option(extra_data);
-        self.blocks.size.append_option(size.map(|s| i256::from_i128(i128::from(s))));
+        self.blocks
+            .size
+            .append_option(size.map(|s| i256::from_i128(i128::from(s))));
         self.blocks.gas_limit.append_option(gas_limit);
         self.blocks.gas_used.append_option(gas_used);
-        self.blocks.timestamp.append_option(timestamp.map(|t| i256::from_i128(i128::from(t))));
+        self.blocks
+            .timestamp
+            .append_option(timestamp.map(|t| i256::from_i128(i128::from(t))));
         self.blocks.uncles.append_null();
         self.blocks.base_fee_per_gas.append_option(base_fee_per_gas);
         self.blocks.blob_gas_used.append_option(blob_gas_used);
@@ -310,8 +500,8 @@ impl ArrowResponseParser {
         self.blocks.send_count.append_null();
         self.blocks.send_root.append_null();
         self.blocks.mix_hash.append_option(mix_hash);
-        
-        Ok(())
+
+        Ok(BlockInfo { number, hash })
     }
 
     pub(crate) fn finish(self) -> ArrowResponse {
@@ -324,10 +514,52 @@ impl ArrowResponseParser {
     }
 }
 
+struct BlockInfo {
+    number: Option<u64>,
+    hash: Option<Vec<u8>>,
+}
+
+fn get_tape_array_of_hex(
+    obj: &simd_json::tape::Object<'_, '_>,
+    name: &str,
+) -> Result<Option<Vec<Vec<u8>>>> {
+    let arr = match obj.get(name) {
+        Some(v) => v,
+        None => return Ok(None),
+    };
+    let arr = arr
+        .as_array()
+        .with_context(|| format!("{} as array", name))?;
+
+    let mut out = Vec::with_capacity(arr.len());
+
+    for v in arr.iter() {
+        let v = v
+            .as_str()
+            .with_context(|| format!("element of {} as str", name))?;
+        let v =
+            decode_prefixed_hex(v).with_context(|| format!("decode element of {} as hex", name))?;
+        out.push(v);
+    }
+
+    Ok(Some(out))
+}
+
+fn get_tape_u8(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u8>> {
+    let val = match obj.get(name) {
+        Some(v) => v,
+        None => return Ok(None),
+    };
+    val.as_u8()
+        .with_context(|| format!("{} as u8", name))
+        .map(Some)
+}
+
 fn get_tape_i256(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<i256>> {
     let hex = get_tape_hex(obj, name).context("get_tape_hex")?;
-    
-    hex.map(|v| i256_from_be_slice(&v).with_context(|| format!("parse i256 from {}", name))).transpose()
+
+    hex.map(|v| i256_from_be_slice(&v).with_context(|| format!("parse i256 from {}", name)))
+        .transpose()
 }
 
 fn i256_from_be_slice(data: &[u8]) -> Result<i256> {
@@ -358,7 +590,9 @@ fn get_tape_hex<'a>(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result
     };
     let hex = hex.as_str().with_context(|| format!("{} as str", name))?;
 
-    decode_prefixed_hex(hex).with_context(|| format!("prefix_hex_decode {}", name)).map(Some)
+    decode_prefixed_hex(hex)
+        .with_context(|| format!("prefix_hex_decode {}", name))
+        .map(Some)
 }
 
 fn decode_prefixed_hex(val: &str) -> Result<Vec<u8>> {

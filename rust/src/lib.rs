@@ -170,6 +170,11 @@ mod tests {
                     receipts_root: true,
                     ..Default::default()
                 },
+                transaction: evm::TransactionFields {
+                    hash: true,
+                    y_parity: true,
+                    ..Default::default()
+                },
                 trace: evm::TraceFields {
                     transaction_index: true,
                     ..Default::default()
@@ -200,6 +205,6 @@ mod tests {
 
         let arrow_data = client.evm_arrow_finalized_query(&query).await.unwrap();
 
-        dbg!(arrow_data);
+        // dbg!(arrow_data);
     }
 }
