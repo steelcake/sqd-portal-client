@@ -18,6 +18,7 @@ log = { workspace = true }
 rand = { workspace = true } 
 tokio = { workspace = true }
 simd-json = "0.14"
+bytes = "1" 
 
 [dependencies.reqwest]
 version = "0.12"

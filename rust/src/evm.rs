@@ -1,5 +1,5 @@
-use anyhow::{anyhow, Context, Result};
-use arrow::{array::builder, record_batch::RecordBatch};
+use anyhow::{Context, Result};
+use arrow::record_batch::RecordBatch;
 use cherry_evm_schema::{BlocksBuilder, LogsBuilder, TracesBuilder, TransactionsBuilder};
 use serde::{Deserialize, Serialize};
 
@@ -237,6 +237,7 @@ pub struct ArrowResponse {
     // state_diffs: recordbatch,
 }
 
+#[derive(Default)]
 pub(crate) struct ArrowResponseParser {
     blocks: BlocksBuilder,
     transactions: TransactionsBuilder,
@@ -245,24 +246,20 @@ pub(crate) struct ArrowResponseParser {
 }
 
 impl ArrowResponseParser {
-    fn parse_tape(&mut self, tape: &simd_json::tape::Tape<'_>) -> Result<()> {
-        todo!()
+    pub(crate) fn parse_tape(&mut self, tape: &simd_json::tape::Tape<'_>) -> Result<()> {
+        let obj = tape.as_value().as_object().context("tape as object")?;
+        let header = obj.get("header").context("get header")?;
+        dbg!(&header);
+
+        Ok(())
     }
-}
 
-impl crate::ResponseParser for ArrowResponseParser {
-    type Output = ArrowResponse;
-
-    fn parse(&self, bytes: &mut [u8]) -> Result<ArrowResponse> {
-        let mut blocks_builder = BlocksBuilder::default(); 
-        let mut transactions_builder = TransactionsBuilder::default();
-        let mut logs_builder = LogsBuilder::default();
-        let mut traces_builder = TracesBuilder::default();
-    
-        let tape = simd_json::to_tape(bytes).context("json to tape")?; 
-
-        panic!("{:?}", tape);
-
-        todo!()
+    pub(crate) fn finish(self) -> ArrowResponse {
+        ArrowResponse {
+            blocks: self.blocks.finish(),
+            transactions: self.transactions.finish(),
+            logs: self.logs.finish(),
+            traces: self.traces.finish(),
+        }
     }
 }

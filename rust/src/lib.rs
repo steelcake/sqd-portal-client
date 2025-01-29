@@ -1,8 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
-use reqwest::{Client as HttpClient, Method, Url};
-use serde::Serialize;
+use reqwest::{header::CONTENT_TYPE, Client as HttpClient, Method, Url};
 
 pub mod evm;
 
@@ -53,21 +52,41 @@ impl Client {
         }
     }
 
-    pub async fn evm_arrow_finalized_query(&self, query: &evm::Query) -> Result<evm::ArrowResponse> {
-        self.finalized_query(&evm::ArrowResponseParser, query).await
+    pub async fn evm_arrow_finalized_query(
+        &self,
+        query: &evm::Query,
+    ) -> Result<evm::ArrowResponse> {
+        let query = simd_json::to_vec(query).context("serialize query")?;
+        let query = bytes::Bytes::from(query);
+
+        let response = self.finalized_query(query).await.context("execute query")?;
+
+        let mut parser = evm::ArrowResponseParser::default();
+
+        let lines = response.split(|x| *x == b'\n');
+        let mut scratch = Vec::new();
+
+        for line in lines {
+            if line.is_empty() {
+                continue;
+            }
+
+            scratch.extend_from_slice(line);
+            let tape = simd_json::to_tape(&mut scratch).context("json to tape")?;
+            parser.parse_tape(&tape).context("parse tape")?;
+            scratch.clear();
+        }
+
+        Ok(parser.finish())
     }
 
-    async fn finalized_query<Q: Serialize, R: ResponseParser>(
-        &self,
-        parser: &R,
-        query: &Q,
-    ) -> Result<R::Output> {
+    async fn finalized_query(&self, query: bytes::Bytes) -> Result<bytes::Bytes> {
         let mut base = self.retry_base_ms;
 
         let mut err = anyhow!("");
 
         for _ in 0..self.max_num_retries + 1 {
-            match self.finalized_query_impl::<Q, R>(parser, query).await {
+            match self.finalized_query_impl(query.clone()).await {
                 Ok(res) => return Ok(res),
                 Err(e) => {
                     log::error!(
@@ -89,17 +108,19 @@ impl Client {
         Err(err)
     }
 
-    async fn finalized_query_impl<Q: Serialize, R: ResponseParser>(
-        &self,
-        query: &[u8],
-    ) -> Result<R::Output> {
+    async fn finalized_query_impl(&self, query: bytes::Bytes) -> Result<bytes::Bytes> {
         let mut url = self.url.clone();
         let mut segments = url.path_segments_mut().ok().context("get path segments")?;
         segments.push("finalized-stream");
         std::mem::drop(segments);
         let req = self.http_client.request(Method::POST, url);
 
-        let res = req.json(&query).send().await.context("execute http req")?;
+        let res = req
+            .header(CONTENT_TYPE, "application/json")
+            .body(query)
+            .send()
+            .await
+            .context("execute http req")?;
 
         let status = res.status();
         if !status.is_success() {
@@ -112,26 +133,8 @@ impl Client {
             ));
         }
 
-        let bytes = res.bytes().await.context("read response body bytes")?;
-        let mut bytes = bytes.to_vec();
-    
-        let output = parser.parse(bytes.as_mut_slice()).context("parse json")?;
-
-        Ok(output)
+        res.bytes().await.context("read response body bytes")
     }
-
-    // pub fn finalized_stream(query: &EvmQuery, config: &StreamConfig) -> Result<FinalizedStream<EvmResponse>> {
-    //     todo!()
-    // }
-}
-
-// pub struct StreamConfig {
-
-// }
-//
-
-trait ResponseParser {
-    fn parse(&mut self, tape: &simd_json::Tape<'_>) -> Result<()>;
 }
 
 #[cfg(test)]
@@ -194,9 +197,6 @@ mod tests {
 
         println!("{}", serde_json::to_string_pretty(&query).unwrap());
 
-        client
-            .finalized_query::<_, evm::ArrowResponseParser>(&evm::ArrowResponseParser::default(), &query)
-            .await
-            .unwrap();
+        client.evm_arrow_finalized_query(&query).await.unwrap();
     }
 }
