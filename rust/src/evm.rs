@@ -262,8 +262,26 @@ impl ArrowResponseParser {
         self.parse_logs(&block_info, &obj)
             .context("parse logs")?;
 
-        // self.parse_traces(&block_info, &obj)
-        //     .context("parse traces")?;
+        self.parse_traces(&block_info, &obj)
+            .context("parse traces")?;
+
+        Ok(())
+    }
+
+    fn parse_traces(&mut self, block_info: &BlockInfo, obj: &simd_json::tape::Object<'_, '_>) -> Result<()> {
+        let traces = match obj.get("traces") {
+            Some(traces) => traces,
+            None => return Ok(()),
+        };
+
+        let traces = traces.as_array().context("traces as array")?;
+
+        for trace in traces.iter() {
+            let trace = trace.as_object().context("trace as object")?;
+
+            let transaction_index = get_tape_u64(&trace, "transactionIndex")?;
+            // let trace_address = get_
+        }
 
         Ok(())
     }
@@ -279,9 +297,9 @@ impl ArrowResponseParser {
         for log in logs.iter() {
             let log = log.as_object().context("log as object")?;
 
-            let log_index = get_tape_u64(&log, "log_index")?;
-            let transaction_index = get_tape_u64(&log, "transaction_index")?;
-            let transaction_hash = get_tape_hex(&log, "transaction_hash")?;
+            let log_index = get_tape_u64(&log, "logIndex")?;
+            let transaction_index = get_tape_u64(&log, "transactionIndex")?;
+            let transaction_hash = get_tape_hex(&log, "transactionHash")?;
             let address = get_tape_hex(&log, "address")?;
             let data = get_tape_hex(&log, "data")?;
             let topics = get_tape_array_of_hex(&log, "topics")?;
@@ -325,7 +343,7 @@ impl ArrowResponseParser {
         for tx in transactions.iter() {
             let tx = tx.as_object().context("transaction as object")?;
 
-            let transaction_index = get_tape_u64(&tx, "transaction_index")?;
+            let transaction_index = get_tape_u64(&tx, "transactionIndex")?;
             let hash = get_tape_hex(&tx, "hash")?;
             let nonce = get_tape_i256(&tx, "nonce")?;
             let from = get_tape_hex(&tx, "from")?;
@@ -333,30 +351,30 @@ impl ArrowResponseParser {
             let input = get_tape_hex(&tx, "input")?;
             let value = get_tape_i256(&tx, "value")?;
             let gas = get_tape_i256(&tx, "gas")?;
-            let gas_price = get_tape_i256(&tx, "gas_price")?;
-            let max_fee_per_gas = get_tape_i256(&tx, "max_fee_per_gas")?;
-            let max_priority_fee_per_gas = get_tape_i256(&tx, "max_priority_fee_per_gas")?;
+            let gas_price = get_tape_i256(&tx, "gasPrice")?;
+            let max_fee_per_gas = get_tape_i256(&tx, "maxFeePerGas")?;
+            let max_priority_fee_per_gas = get_tape_i256(&tx, "maxPriorityFeePerGas")?;
             let v = get_tape_i256(&tx, "v")?;
             let r = get_tape_i256(&tx, "r")?;
             let s = get_tape_i256(&tx, "s")?;
-            let y_parity = get_tape_u8(&tx, "y_parity")?;
-            let chain_id = get_tape_i256(&tx, "chain_id")?;
+            let y_parity = get_tape_u8(&tx, "yParity")?;
+            let chain_id = get_tape_i256(&tx, "chainId")?;
             let sighash = get_tape_hex(&tx, "sighash")?;
-            let contract_address = get_tape_hex(&tx, "contract_address")?;
-            let gas_used = get_tape_i256(&tx, "gas_use")?;
-            let cumulative_gas_used = get_tape_i256(&tx, "cumulative_gas_used")?;
-            let effective_gas_price = get_tape_i256(&tx, "effective_gas_price")?;
+            let contract_address = get_tape_hex(&tx, "contractAddress")?;
+            let gas_used = get_tape_i256(&tx, "gasUsed")?;
+            let cumulative_gas_used = get_tape_i256(&tx, "cumulativeGasUsed")?;
+            let effective_gas_price = get_tape_i256(&tx, "effectiveGasPrice")?;
             let type_ = get_tape_u8(&tx, "type")?;
             let status = get_tape_u8(&tx, "status")?;
-            let max_fee_per_blob_gas = get_tape_i256(&tx, "max_fee_per_blob_gas")?;
-            let blob_versioned_hashes = get_tape_array_of_hex(&tx, "blob_versioned_hashes")?;
-            let l1_fee = get_tape_i256(&tx, "l1_fee")?;
-            let l1_fee_scalar = get_tape_i256(&tx, "l1_fee_scalar")?;
-            let l1_gas_price = get_tape_i256(&tx, "l1_gas_price")?;
-            let l1_gas_used = get_tape_i256(&tx, "l1_gas_used")?;
-            let l1_blob_base_fee = get_tape_i256(&tx, "l1_blob_base_fee")?;
-            let l1_blob_base_fee_scalar = get_tape_i256(&tx, "l1_blob_base_fee_scalar")?;
-            let l1_base_fee_scalar = get_tape_i256(&tx, "l1_base_fee_scalar")?;
+            let max_fee_per_blob_gas = get_tape_i256(&tx, "maxFeePerBlobGas")?;
+            let blob_versioned_hashes = get_tape_array_of_hex(&tx, "blobVersionedHashes")?;
+            let l1_fee = get_tape_i256(&tx, "l1Fee")?;
+            let l1_fee_scalar = get_tape_i256(&tx, "l1FeeScalar")?;
+            let l1_gas_price = get_tape_i256(&tx, "l1GasPrice")?;
+            let l1_gas_used = get_tape_i256(&tx, "l1GasUsed")?;
+            let l1_blob_base_fee = get_tape_i256(&tx, "l1BlobBaseFee")?;
+            let l1_blob_base_fee_scalar = get_tape_i256(&tx, "l1BlobBaseFeeScalar")?;
+            let l1_base_fee_scalar = get_tape_i256(&tx, "l1BaseFeeScalar")?;
 
             self.transactions
                 .block_hash
