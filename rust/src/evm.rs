@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context, Result};
-use arrow::{array::RecordBatch, ipc::RecordBatch};
+use arrow::{array::builder, record_batch::RecordBatch};
+use cherry_evm_schema::{BlocksBuilder, LogsBuilder, TracesBuilder, TransactionsBuilder};
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -236,16 +237,32 @@ pub struct ArrowResponse {
     // state_diffs: recordbatch,
 }
 
-#[derive(Default)]
-pub struct ArrowResponseParser {
-    // this is to disallow initializing this struct like ResponseParser {} outside of this library
-    _unused: bool,
+pub(crate) struct ArrowResponseParser {
+    blocks: BlocksBuilder,
+    transactions: TransactionsBuilder,
+    logs: LogsBuilder,
+    traces: TracesBuilder,
+}
+
+impl ArrowResponseParser {
+    fn parse_tape(&mut self, tape: &simd_json::tape::Tape<'_>) -> Result<()> {
+        todo!()
+    }
 }
 
 impl crate::ResponseParser for ArrowResponseParser {
     type Output = ArrowResponse;
 
-    fn parse(&self, bytes: &[u8]) -> Result<ArrowResponse> {
+    fn parse(&self, bytes: &mut [u8]) -> Result<ArrowResponse> {
+        let mut blocks_builder = BlocksBuilder::default(); 
+        let mut transactions_builder = TransactionsBuilder::default();
+        let mut logs_builder = LogsBuilder::default();
+        let mut traces_builder = TracesBuilder::default();
+    
+        let tape = simd_json::to_tape(bytes).context("json to tape")?; 
+
+        panic!("{:?}", tape);
+
         todo!()
     }
 }

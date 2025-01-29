@@ -53,7 +53,11 @@ impl Client {
         }
     }
 
-    pub async fn finalized_query<Q: Serialize, R: ResponseParser>(
+    pub async fn evm_arrow_finalized_query(&self, query: &evm::Query) -> Result<evm::ArrowResponse> {
+        self.finalized_query(&evm::ArrowResponseParser, query).await
+    }
+
+    async fn finalized_query<Q: Serialize, R: ResponseParser>(
         &self,
         parser: &R,
         query: &Q,
@@ -87,8 +91,7 @@ impl Client {
 
     async fn finalized_query_impl<Q: Serialize, R: ResponseParser>(
         &self,
-        parser: &R,
-        query: &Q,
+        query: &[u8],
     ) -> Result<R::Output> {
         let mut url = self.url.clone();
         let mut segments = url.path_segments_mut().ok().context("get path segments")?;
@@ -110,8 +113,9 @@ impl Client {
         }
 
         let bytes = res.bytes().await.context("read response body bytes")?;
-
-        let output = parser.parse(&bytes).context("parse response")?;
+        let mut bytes = bytes.to_vec();
+    
+        let output = parser.parse(bytes.as_mut_slice()).context("parse json")?;
 
         Ok(output)
     }
@@ -124,11 +128,10 @@ impl Client {
 // pub struct StreamConfig {
 
 // }
+//
 
-pub trait ResponseParser {
-    type Output;
-
-    fn parse(&self, bytes: &[u8]) -> Result<Self::Output>;
+trait ResponseParser {
+    fn parse(&mut self, tape: &simd_json::Tape<'_>) -> Result<()>;
 }
 
 #[cfg(test)]
@@ -192,7 +195,7 @@ mod tests {
         println!("{}", serde_json::to_string_pretty(&query).unwrap());
 
         client
-            .finalized_query::<_, evm::Response>(&query)
+            .finalized_query::<_, evm::ArrowResponseParser>(&evm::ArrowResponseParser::default(), &query)
             .await
             .unwrap();
     }
