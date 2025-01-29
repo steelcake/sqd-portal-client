@@ -1,7 +1,8 @@
-use anyhow::{Context, Result};
-use arrow::record_batch::RecordBatch;
+use anyhow::{anyhow, Context, Result};
+use arrow::{datatypes::i256, record_batch::RecordBatch};
 use cherry_evm_schema::{BlocksBuilder, LogsBuilder, TracesBuilder, TransactionsBuilder};
 use serde::{Deserialize, Serialize};
+use simd_json::base::ValueAsScalar;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -229,6 +230,7 @@ pub struct BlockFields {
     pub l1_block_number: bool,
 }
 
+#[derive(Debug)]
 pub struct ArrowResponse {
     pub blocks: RecordBatch,
     pub transactions: RecordBatch,
@@ -249,8 +251,66 @@ impl ArrowResponseParser {
     pub(crate) fn parse_tape(&mut self, tape: &simd_json::tape::Tape<'_>) -> Result<()> {
         let obj = tape.as_value().as_object().context("tape as object")?;
         let header = obj.get("header").context("get header")?;
-        dbg!(&header);
 
+        let header = header.as_object().context("header as object")?;
+        self.parse_header(&header).context("parse header")?;
+
+        Ok(())
+    }
+
+    fn parse_header(&mut self, header: &simd_json::tape::Object<'_, '_>) -> Result<()> {
+        let number = get_tape_u64(header, "number")?;
+        let hash = get_tape_hex(header, "hash")?;
+        let parent_hash = get_tape_hex(header, "parentHash")?;
+        let timestamp = get_tape_u64(header, "timestamp")?;
+        let transactions_root = get_tape_hex(header, "transactionsRoot")?;
+        let receipts_root = get_tape_hex(header, "receiptsRoot")?;
+        let state_root = get_tape_hex(header, "stateRoot")?;
+        let logs_bloom = get_tape_hex(header, "logsBloom")?;
+        let sha3_uncles = get_tape_hex(header, "sha3Uncles")?;
+        let extra_data = get_tape_hex(header, "extraData")?;
+        let miner = get_tape_hex(header, "miner")?;
+        let nonce = get_tape_hex(header, "nonce")?;
+        let mix_hash = get_tape_hex(header, "mixHash")?;
+        let size = get_tape_u64(header, "size")?;
+        let gas_limit = get_tape_i256(header, "gasLimit")?;
+        let gas_used = get_tape_i256(header, "gasUsed")?;
+        let difficulty = get_tape_i256(header, "difficulty")?;
+        let total_difficulty = get_tape_i256(header, "totalDifficulty")?;
+        let base_fee_per_gas = get_tape_i256(header, "baseFeePerGas")?;
+        let blob_gas_used = get_tape_i256(header, "blobGasUsed")?;
+        let excess_blob_gas = get_tape_i256(header, "excessBlobGas")?;
+        let l1_block_number = get_tape_u64(header, "l1BlockNumber")?;
+
+        self.blocks.number.append_option(number);
+        self.blocks.hash.append_option(hash);
+        self.blocks.parent_hash.append_option(parent_hash);
+        self.blocks.nonce.append_option(nonce);
+        self.blocks.sha3_uncles.append_option(sha3_uncles);
+        self.blocks.logs_bloom.append_option(logs_bloom);
+        self.blocks.transactions_root.append_option(transactions_root);
+        self.blocks.state_root.append_option(state_root);
+        self.blocks.receipts_root.append_option(receipts_root);
+        self.blocks.miner.append_option(miner);
+        self.blocks.difficulty.append_option(difficulty);
+        self.blocks.total_difficulty.append_option(total_difficulty);
+        self.blocks.extra_data.append_option(extra_data);
+        self.blocks.size.append_option(size.map(|s| i256::from_i128(i128::from(s))));
+        self.blocks.gas_limit.append_option(gas_limit);
+        self.blocks.gas_used.append_option(gas_used);
+        self.blocks.timestamp.append_option(timestamp.map(|t| i256::from_i128(i128::from(t))));
+        self.blocks.uncles.append_null();
+        self.blocks.base_fee_per_gas.append_option(base_fee_per_gas);
+        self.blocks.blob_gas_used.append_option(blob_gas_used);
+        self.blocks.excess_blob_gas.append_option(excess_blob_gas);
+        self.blocks.parent_beacon_block_root.append_null();
+        self.blocks.withdrawals_root.append_null();
+        self.blocks.withdrawals.0.append_null();
+        self.blocks.l1_block_number.append_option(l1_block_number);
+        self.blocks.send_count.append_null();
+        self.blocks.send_root.append_null();
+        self.blocks.mix_hash.append_option(mix_hash);
+        
         Ok(())
     }
 
@@ -262,4 +322,61 @@ impl ArrowResponseParser {
             traces: self.traces.finish(),
         }
     }
+}
+
+fn get_tape_i256(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<i256>> {
+    let hex = get_tape_hex(obj, name).context("get_tape_hex")?;
+    
+    hex.map(|v| i256_from_be_slice(&v).with_context(|| format!("parse i256 from {}", name))).transpose()
+}
+
+fn i256_from_be_slice(data: &[u8]) -> Result<i256> {
+    if data.len() > 32 {
+        return Err(anyhow!("data is bigger than 32 bytes"));
+    }
+
+    let mut bytes = [0; 32];
+    bytes[0..data.len()].copy_from_slice(data);
+
+    Ok(i256::from_be_bytes(bytes))
+}
+
+fn get_tape_u64(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u64>> {
+    let val = match obj.get(name) {
+        Some(val) => val,
+        None => return Ok(None),
+    };
+    val.as_u64()
+        .with_context(|| format!("get {} as u64", name))
+        .map(Some)
+}
+
+fn get_tape_hex<'a>(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<Vec<u8>>> {
+    let hex = match obj.get(name) {
+        Some(hex) => hex,
+        None => return Ok(None),
+    };
+    let hex = hex.as_str().with_context(|| format!("{} as str", name))?;
+
+    decode_prefixed_hex(hex).with_context(|| format!("prefix_hex_decode {}", name)).map(Some)
+}
+
+fn decode_prefixed_hex(val: &str) -> Result<Vec<u8>> {
+    let val = val.strip_prefix("0x").context("invalid hex prefix")?;
+
+    if val.len() % 2 == 0 {
+        decode_hex(val)
+    } else {
+        let val = format!("0{val}");
+        decode_hex(val.as_str())
+    }
+}
+
+fn decode_hex(hex: &str) -> Result<Vec<u8>> {
+    let len = hex.as_bytes().len();
+    let mut dst = vec![0; len / 2];
+
+    faster_hex::hex_decode(hex.as_bytes(), &mut dst)?;
+
+    Ok(dst)
 }

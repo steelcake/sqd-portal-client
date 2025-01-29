@@ -167,6 +167,7 @@ mod tests {
                     difficulty: true,
                     size: true,
                     gas_limit: true,
+                    receipts_root: true,
                     ..Default::default()
                 },
                 trace: evm::TraceFields {
@@ -178,7 +179,7 @@ mod tests {
             ..Default::default()
         };
 
-        dbg!(&query);
+        // dbg!(&query);
 
         // let query: evm::Query = serde_json::from_value(serde_json::json!({
         //     "from_block": 20123123,
@@ -195,8 +196,10 @@ mod tests {
         //     }
         // })).unwrap();
 
-        println!("{}", serde_json::to_string_pretty(&query).unwrap());
+        // println!("{}", serde_json::to_string_pretty(&query).unwrap());
 
-        client.evm_arrow_finalized_query(&query).await.unwrap();
+        let arrow_data = client.evm_arrow_finalized_query(&query).await.unwrap();
+
+        dbg!(arrow_data);
     }
 }
