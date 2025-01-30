@@ -3,6 +3,7 @@ use arrow::{datatypes::i256, record_batch::RecordBatch};
 use cherry_evm_schema::{BlocksBuilder, LogsBuilder, TracesBuilder, TransactionsBuilder};
 use serde::{Deserialize, Serialize};
 use simd_json::base::ValueAsScalar;
+use simd_json::derived::TypedScalarValue;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -259,8 +260,7 @@ impl ArrowResponseParser {
         self.parse_transactions(&block_info, &obj)
             .context("parse transactions")?;
 
-        self.parse_logs(&block_info, &obj)
-            .context("parse logs")?;
+        self.parse_logs(&block_info, &obj).context("parse logs")?;
 
         self.parse_traces(&block_info, &obj)
             .context("parse traces")?;
@@ -268,7 +268,11 @@ impl ArrowResponseParser {
         Ok(())
     }
 
-    fn parse_traces(&mut self, block_info: &BlockInfo, obj: &simd_json::tape::Object<'_, '_>) -> Result<()> {
+    fn parse_traces(
+        &mut self,
+        block_info: &BlockInfo,
+        obj: &simd_json::tape::Object<'_, '_>,
+    ) -> Result<()> {
         let traces = match obj.get("traces") {
             Some(traces) => traces,
             None => return Ok(()),
@@ -280,13 +284,44 @@ impl ArrowResponseParser {
             let trace = trace.as_object().context("trace as object")?;
 
             let transaction_index = get_tape_u64(&trace, "transactionIndex")?;
-            // let trace_address = get_
+            let trace_address = get_tape_array_of_u64(&trace, "traceAddress")?;
+            let subtraces = get_tape_u64(&trace, "subtraces")?;
+            let type_ = get_tape_string(&trace, "type")?;
+            let error = get_tape_string(&trace, "error")?;
+            let revert_reason = get_tape_string(&trace, "revert_reason")?;
+            let create_from = get_tape_hex(&trace, "createFrom")?;
+            let create_to = get_tape_hex(&trace, "createTo")?;
+            let create_gas = get_tape_i256(&trace, "createGas")?;
+            let create_init = get_tape_hex(&trace, "createInit")?;
+            let create_result_gas_used = get_tape_i256(&trace, "createResultGasUsed")?;
+            let create_result_code = get_tape_hex(&trace, "createResultCode")?;
+            let create_result_address = get_tape_hex(&trace, "createResultAddress")?;
+            let call_from = get_tape_hex(&trace, "callFrom")?;
+            let call_to = get_tape_hex(&trace, "callTo")?;
+            let call_value = get_tape_i256(&trace, "callValue")?;
+            let call_gas = get_tape_i256(&trace, "callGas")?;
+            let call_input = get_tape_hex(&trace, "callInput")?;
+            let call_sighash = get_tape_hex(&trace, "callSighash")?;
+            let call_type = get_tape_string(&trace, "callType")?;
+            let call_call_type = get_tape_string(&trace, "callCallType")?;
+            let call_result_gas_used = get_tape_i256(&trace, "callResultGasUsed")?;
+            let call_result_output = get_tape_hex(&trace, "callResultOutput")?;
+            let suicide_address = get_tape_hex(&trace, "suicideAddress")?;
+            let suicide_refund_address = get_tape_hex(&trace, "suicideRefundAddress")?;
+            let suicide_balance = get_tape_i256(&trace, "suicideBalance")?;
+            let reward_author = get_tape_hex(&trace, "rewardAuthor")?;
+            let reward_value = get_tape_i256(&trace, "rewardValue")?;
+            let reward_type = get_tape_string(&trace, "rewardType")?;
         }
 
         Ok(())
     }
 
-    fn parse_logs(&mut self, block_info: &BlockInfo, obj: &simd_json::tape::Object<'_, '_>) -> Result<()> {
+    fn parse_logs(
+        &mut self,
+        block_info: &BlockInfo,
+        obj: &simd_json::tape::Object<'_, '_>,
+    ) -> Result<()> {
         let logs = match obj.get("logs") {
             Some(logs) => logs,
             None => return Ok(()),
@@ -537,13 +572,39 @@ struct BlockInfo {
     hash: Option<Vec<u8>>,
 }
 
+fn get_tape_array_of_u64(
+    obj: &simd_json::tape::Object<'_, '_>,
+    name: &str,
+) -> Result<Option<Vec<u64>>> {
+    let arr = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+    let arr = arr
+        .as_array()
+        .with_context(|| format!("{} as array", name))?;
+
+    let mut out = Vec::with_capacity(arr.len());
+
+    for v in arr.iter() {
+        let v = v
+            .as_u64()
+            .with_context(|| format!("element of {} as u64", name))?;
+        out.push(v);
+    }
+
+    Ok(Some(out))
+}
+
 fn get_tape_array_of_hex(
     obj: &simd_json::tape::Object<'_, '_>,
     name: &str,
 ) -> Result<Option<Vec<Vec<u8>>>> {
     let arr = match obj.get(name) {
-        Some(v) => v,
         None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
     };
     let arr = arr
         .as_array()
@@ -565,12 +626,24 @@ fn get_tape_array_of_hex(
 
 fn get_tape_u8(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u8>> {
     let val = match obj.get(name) {
-        Some(v) => v,
         None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
     };
     val.as_u8()
         .with_context(|| format!("{} as u8", name))
         .map(Some)
+}
+
+fn get_tape_string(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<String>> {
+    let val = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+    val.as_str()
+        .with_context(|| format!("{} as str", name))
+        .map(|x| Some(x.to_owned()))
 }
 
 fn get_tape_i256(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<i256>> {
@@ -593,8 +666,9 @@ fn i256_from_be_slice(data: &[u8]) -> Result<i256> {
 
 fn get_tape_u64(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u64>> {
     let val = match obj.get(name) {
-        Some(val) => val,
         None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
     };
     val.as_u64()
         .with_context(|| format!("get {} as u64", name))
@@ -603,8 +677,9 @@ fn get_tape_u64(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Opt
 
 fn get_tape_hex<'a>(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<Vec<u8>>> {
     let hex = match obj.get(name) {
-        Some(hex) => hex,
         None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
     };
     let hex = hex.as_str().with_context(|| format!("{} as str", name))?;
 
