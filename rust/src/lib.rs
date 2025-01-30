@@ -156,31 +156,7 @@ mod tests {
                 transaction_traces: true,
                 ..Default::default()
             }],
-            fields: evm::Fields {
-                log: evm::LogFields {
-                    address: true,
-                    ..Default::default()
-                },
-                block: evm::BlockFields {
-                    number: true,
-                    timestamp: true,
-                    difficulty: true,
-                    size: true,
-                    gas_limit: true,
-                    receipts_root: true,
-                    ..Default::default()
-                },
-                transaction: evm::TransactionFields {
-                    hash: true,
-                    y_parity: true,
-                    ..Default::default()
-                },
-                trace: evm::TraceFields {
-                    transaction_index: true,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
+            fields: evm::Fields::all(),
             ..Default::default()
         };
 

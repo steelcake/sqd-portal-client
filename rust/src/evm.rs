@@ -105,9 +105,21 @@ pub struct StateDiffRequest {
 pub struct Fields {
     pub log: LogFields,
     pub transaction: TransactionFields,
-    pub state_diff: StateDiffFields,
+    // pub state_diff: StateDiffFields,
     pub trace: TraceFields,
     pub block: BlockFields,
+}
+
+impl Fields {
+    pub fn all() -> Self {
+        Self {
+            log: LogFields::all(),
+            transaction: TransactionFields::all(),
+            // state_diff: StateDiffFields::all(),
+            trace: TraceFields::all(),
+            block: BlockFields::all(),
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -119,6 +131,19 @@ pub struct LogFields {
     pub address: bool,
     pub data: bool,
     pub topics: bool,
+}
+
+impl LogFields {
+    pub fn all() -> Self {
+        Self {
+            log_index: true,
+            transaction_index: true,
+            transaction_hash: true,
+            address: true,
+            data: true,
+            topics: true,
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -157,6 +182,45 @@ pub struct TransactionFields {
     pub l1_blob_base_fee: bool,
     pub l1_blob_base_fee_scalar: bool,
     pub l1_base_fee_scalar: bool,
+}
+
+impl TransactionFields {
+    pub fn all() -> Self {
+        Self {
+            transaction_index: true,
+            hash: true,
+            nonce: true,
+            from: true,
+            to: true,
+            input: true,
+            value: true,
+            gas: true,
+            gas_price: true,
+            max_fee_per_gas: true,
+            max_priority_fee_per_gas: true,
+            v: true,
+            r: true,
+            s: true,
+            y_parity: true,
+            chain_id: true,
+            sighash: true,
+            contract_address: true,
+            gas_used: true,
+            cumulative_gas_used: true,
+            effective_gas_price: true,
+            type_: true,
+            status: true,
+            max_fee_per_blob_gas: true,
+            blob_versioned_hashes: true,
+            l1_fee: true,
+            l1_fee_scalar: true,
+            l1_gas_price: true,
+            l1_gas_used: true,
+            l1_blob_base_fee: true,
+            l1_blob_base_fee_scalar: true,
+            l1_base_fee_scalar: true,
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -205,6 +269,42 @@ pub struct TraceFields {
     pub reward_type: bool,
 }
 
+impl TraceFields {
+    pub fn all() -> Self {
+        Self {
+            transaction_index: true,
+            trace_address: true,
+            subtraces: true,
+            type_: true,
+            error: true,
+            revert_reason: true,
+            create_from: true,
+            create_value: true,
+            create_gas: true,
+            create_init: true,
+            create_result_gas_used: true,
+            create_result_code: true,
+            create_result_address: true,
+            call_from: true,
+            call_to: true,
+            call_value: true,
+            call_gas: true,
+            call_input: true,
+            call_sighash: true,
+            call_type: true,
+            call_call_type: true,
+            call_result_gas_used: true,
+            call_result_output: true,
+            suicide_address: true,
+            suicide_refund_address: true,
+            suicide_balance: true,
+            reward_author: true,
+            reward_value: true,
+            reward_type: true,
+        }
+    }
+}
+
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockFields {
@@ -230,6 +330,35 @@ pub struct BlockFields {
     pub blob_gas_used: bool,
     pub excess_blob_gas: bool,
     pub l1_block_number: bool,
+}
+
+impl BlockFields {
+    pub fn all() -> Self {
+        Self {
+            number: true,
+            hash: true,
+            parent_hash: true,
+            timestamp: true,
+            transactions_root: true,
+            receipts_root: true,
+            state_root: true,
+            logs_bloom: true,
+            sha3_uncles: true,
+            extra_data: true,
+            miner: true,
+            nonce: true,
+            mix_hash: true,
+            size: true,
+            gas_limit: true,
+            gas_used: true,
+            difficulty: true,
+            total_difficulty: true,
+            base_fee_per_gas: true,
+            blob_gas_used: true,
+            excess_blob_gas: true,
+            l1_block_number: true,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -387,9 +516,9 @@ impl ArrowResponseParser {
             self.logs.data.append_option(data);
             if let Some(topics) = topics {
                 self.logs.topic0.append_option(topics.first());
-                self.logs.topic0.append_option(topics.get(1));
-                self.logs.topic0.append_option(topics.get(2));
-                self.logs.topic0.append_option(topics.get(3));
+                self.logs.topic1.append_option(topics.get(1));
+                self.logs.topic2.append_option(topics.get(2));
+                self.logs.topic3.append_option(topics.get(3));
             } else {
                 self.logs.topic0.append_null();
                 self.logs.topic1.append_null();
@@ -418,7 +547,7 @@ impl ArrowResponseParser {
 
             let transaction_index = get_tape_u64(&tx, "transactionIndex")?;
             let hash = get_tape_hex(&tx, "hash")?;
-            let nonce = get_tape_i256(&tx, "nonce")?;
+            let nonce = get_tape_u64(&tx, "nonce")?;
             let from = get_tape_hex(&tx, "from")?;
             let to = get_tape_hex(&tx, "to")?;
             let input = get_tape_hex(&tx, "input")?;
@@ -431,7 +560,7 @@ impl ArrowResponseParser {
             let r = get_tape_i256(&tx, "r")?;
             let s = get_tape_i256(&tx, "s")?;
             let y_parity = get_tape_u8(&tx, "yParity")?;
-            let chain_id = get_tape_i256(&tx, "chainId")?;
+            let chain_id = get_tape_u64(&tx, "chainId")?;
             let sighash = get_tape_hex(&tx, "sighash")?;
             let contract_address = get_tape_hex(&tx, "contractAddress")?;
             let gas_used = get_tape_i256(&tx, "gasUsed")?;
@@ -460,7 +589,9 @@ impl ArrowResponseParser {
             self.transactions.gas_price.append_option(gas_price);
             self.transactions.hash.append_option(hash);
             self.transactions.input.append_option(input);
-            self.transactions.nonce.append_option(nonce);
+            self.transactions
+                .nonce
+                .append_option(nonce.map(|n| i256::from_i128(i128::from(n))));
             self.transactions.to.append_option(to);
             self.transactions
                 .transaction_index
@@ -475,7 +606,9 @@ impl ArrowResponseParser {
             self.transactions
                 .max_fee_per_gas
                 .append_option(max_fee_per_gas);
-            self.transactions.chain_id.append_option(chain_id);
+            self.transactions
+                .chain_id
+                .append_option(chain_id.map(|c| i256::from_i128(i128::from(c))));
             self.transactions
                 .cumulative_gas_used
                 .append_option(cumulative_gas_used);
