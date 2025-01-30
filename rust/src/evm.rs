@@ -312,6 +312,44 @@ impl ArrowResponseParser {
             let reward_author = get_tape_hex(&trace, "rewardAuthor")?;
             let reward_value = get_tape_i256(&trace, "rewardValue")?;
             let reward_type = get_tape_string(&trace, "rewardType")?;
+
+            self.traces.from.append_option(create_from.or(call_from));
+            self.traces.to.append_option(create_to.or(call_to));
+            self.traces
+                .call_type
+                .append_option(call_type.or(call_call_type));
+            self.traces.gas.append_option(create_gas.or(call_gas));
+            self.traces.input.append_option(call_input);
+            self.traces.init.append_option(create_init);
+            self.traces.value.append_option(call_value.or(reward_value));
+            self.traces.author.append_option(reward_author);
+            self.traces.reward_type.append_option(reward_type);
+            self.traces
+                .block_hash
+                .append_option(block_info.hash.clone());
+            self.traces.block_number.append_option(block_info.number);
+            self.traces.address.append_option(create_result_address);
+            self.traces.code.append_option(create_result_code);
+            self.traces
+                .gas_used
+                .append_option(create_result_gas_used.or(call_result_gas_used));
+            self.traces.output.append_option(call_result_output);
+            self.traces.subtraces.append_option(subtraces);
+            self.traces
+                .trace_address
+                .append_option(trace_address.map(|v| v.into_iter().map(Some)));
+            self.traces.transaction_hash.append_null();
+            self.traces
+                .transaction_position
+                .append_option(transaction_index);
+            self.traces.type_.append_option(type_);
+            self.traces.error.append_option(error.or(revert_reason));
+            self.traces.sighash.append_option(call_sighash);
+            self.traces.action_address.append_option(suicide_address);
+            self.traces.balance.append_option(suicide_balance);
+            self.traces
+                .refund_address
+                .append_option(suicide_refund_address);
         }
 
         Ok(())
@@ -348,7 +386,7 @@ impl ArrowResponseParser {
             self.logs.address.append_option(address);
             self.logs.data.append_option(data);
             if let Some(topics) = topics {
-                self.logs.topic0.append_option(topics.get(0));
+                self.logs.topic0.append_option(topics.first());
                 self.logs.topic0.append_option(topics.get(1));
                 self.logs.topic0.append_option(topics.get(2));
                 self.logs.topic0.append_option(topics.get(3));
@@ -416,7 +454,7 @@ impl ArrowResponseParser {
                 .append_option(block_info.hash.clone());
             self.transactions
                 .block_number
-                .append_option(block_info.number.clone());
+                .append_option(block_info.number);
             self.transactions.from.append_option(from);
             self.transactions.gas.append_option(gas);
             self.transactions.gas_price.append_option(gas_price);
@@ -675,7 +713,7 @@ fn get_tape_u64(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Opt
         .map(Some)
 }
 
-fn get_tape_hex<'a>(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<Vec<u8>>> {
+fn get_tape_hex(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<Vec<u8>>> {
     let hex = match obj.get(name) {
         None => return Ok(None),
         Some(v) if v.is_null() => return Ok(None),
