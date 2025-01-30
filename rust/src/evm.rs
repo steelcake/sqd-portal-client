@@ -830,9 +830,15 @@ fn i256_from_be_slice(data: &[u8]) -> Result<i256> {
     }
 
     let mut bytes = [0; 32];
-    bytes[0..data.len()].copy_from_slice(data);
+    bytes[32 - data.len()..].copy_from_slice(data);
 
-    Ok(i256::from_be_bytes(bytes))
+    let val = i256::from_be_bytes(bytes);
+
+    if val.is_negative() {
+        return Err(anyhow!("value was out of range"));
+    }
+
+    Ok(val)
 }
 
 fn get_tape_u64(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u64>> {

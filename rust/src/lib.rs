@@ -143,25 +143,25 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn dummy() {
-        let url = "https://portal.sqd.dev/datasets/ethereum-mainnet"
+        let url = "https://portal.sqd.dev/datasets/zksync-mainnet"
             .parse()
             .unwrap();
         let client = Client::new(url, ClientConfig::default());
 
         let query = evm::Query {
-            from_block: 15963986,
-            to_block: Some(15963996),
+            from_block: 36963986,
+            to_block: Some(36963986),
             logs: vec![evm::LogRequest::default()],
             transactions: vec![evm::TransactionRequest::default()],
             include_all_blocks: true,
-            // fields: evm::Fields {
-            //     transaction: evm::TransactionFields {
-            //         hash: true,
-            //         ..Default::default()
-            //     },
-            //     ..Default::default()
-            // },
-            fields: evm::Fields::all(),
+            fields: evm::Fields {
+                transaction: evm::TransactionFields {
+                    value: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            // fields: evm::Fields::all(),
             ..Default::default()
         };
 
@@ -184,21 +184,21 @@ mod tests {
 
         // println!("{}", serde_json::to_string_pretty(&query).unwrap());
 
-        let _arrow_data = client.evm_arrow_finalized_query(&query).await.unwrap();
+        let arrow_data = client.evm_arrow_finalized_query(&query).await.unwrap();
 
-        // let tx_hash = arrow_data
-        //     .transactions
-        //     .column_by_name("hash")
-        //     .unwrap()
-        //     .as_any()
-        //     .downcast_ref::<arrow::array::BinaryArray>()
-        //     .unwrap();
+        let tx_hash = arrow_data
+            .transactions
+            .column_by_name("value")
+            .unwrap()
+            .as_any()
+            .downcast_ref::<arrow::array::Decimal256Array>()
+            .unwrap();
 
-        // for hash in tx_hash.iter() {
-        //     if let Some(hash) = hash {
-        //         dbg!(faster_hex::hex_string(hash));
-        //     }
-        // }
+        for hash in tx_hash.iter() {
+            if let Some(hash) = hash {
+                dbg!(hash.to_string());
+            }
+        }
 
         // dbg!(arrow_data);
     }
