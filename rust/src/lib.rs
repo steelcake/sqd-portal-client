@@ -37,7 +37,7 @@ pub struct Client {
 impl Client {
     pub fn new(url: Url, config: ClientConfig) -> Self {
         let http_client = HttpClient::builder()
-            .gzip(false)
+            .gzip(true)
             .timeout(Duration::from_millis(config.http_req_timeout_millis))
             .build()
             .unwrap();
@@ -149,13 +149,18 @@ mod tests {
         let client = Client::new(url, ClientConfig::default());
 
         let query = evm::Query {
-            from_block: 21718704,
-            logs: vec![evm::LogRequest {
-                address: vec!["0xae78736Cd615f374D3085123A210448E74Fc6393".to_lowercase()],
-                transaction: true,
-                transaction_traces: true,
-                ..Default::default()
-            }],
+            from_block: 15963986,
+            to_block: Some(15963996),
+            logs: vec![evm::LogRequest::default()],
+            transactions: vec![evm::TransactionRequest::default()],
+            include_all_blocks: true,
+            // fields: evm::Fields {
+            //     transaction: evm::TransactionFields {
+            //         hash: true,
+            //         ..Default::default()
+            //     },
+            //     ..Default::default()
+            // },
             fields: evm::Fields::all(),
             ..Default::default()
         };
@@ -179,7 +184,21 @@ mod tests {
 
         // println!("{}", serde_json::to_string_pretty(&query).unwrap());
 
-        let arrow_data = client.evm_arrow_finalized_query(&query).await.unwrap();
+        let _arrow_data = client.evm_arrow_finalized_query(&query).await.unwrap();
+
+        // let tx_hash = arrow_data
+        //     .transactions
+        //     .column_by_name("hash")
+        //     .unwrap()
+        //     .as_any()
+        //     .downcast_ref::<arrow::array::BinaryArray>()
+        //     .unwrap();
+
+        // for hash in tx_hash.iter() {
+        //     if let Some(hash) = hash {
+        //         dbg!(faster_hex::hex_string(hash));
+        //     }
+        // }
 
         // dbg!(arrow_data);
     }
