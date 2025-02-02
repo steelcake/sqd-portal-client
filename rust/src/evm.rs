@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Context, Result};
+use arrow::array::UInt64Array;
 use arrow::{datatypes::i256, record_batch::RecordBatch};
 use cherry_evm_schema::{BlocksBuilder, LogsBuilder, TracesBuilder, TransactionsBuilder};
 use serde::{Deserialize, Serialize};
@@ -368,6 +369,23 @@ pub struct ArrowResponse {
     pub logs: RecordBatch,
     pub traces: RecordBatch,
     // state_diffs: recordbatch,
+}
+
+impl ArrowResponse {
+    pub fn next_block(&self) -> Result<u64> {
+        let numbers = self
+            .blocks
+            .column_by_name("number")
+            .context("get number col")?
+            .as_any()
+            .downcast_ref::<UInt64Array>()
+            .context("get number col as u64")?;
+        numbers
+            .values()
+            .last()
+            .context("get last value from block numbers")
+            .map(|v| *v + 1)
+    }
 }
 
 #[derive(Default)]
