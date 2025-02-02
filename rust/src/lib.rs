@@ -25,7 +25,7 @@ impl Default for ClientConfig {
             retry_backoff_ms: 1000,
             retry_base_ms: 250,
             retry_ceiling_ms: 2000,
-            http_req_timeout_millis: 20_000,
+            http_req_timeout_millis: 40_000,
         }
     }
 }
@@ -57,6 +57,7 @@ pub struct Client {
 impl Client {
     pub fn new(url: Url, config: ClientConfig) -> Self {
         let http_client = HttpClient::builder()
+            .http1_only()
             .gzip(true)
             .timeout(Duration::from_millis(config.http_req_timeout_millis))
             .build()
