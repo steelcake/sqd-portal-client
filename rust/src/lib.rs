@@ -1,11 +1,15 @@
+use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
+use futures_lite::Stream;
 use reqwest::{header::CONTENT_TYPE, Client as HttpClient, Method, StatusCode, Url};
 
 pub mod evm;
 
+#[derive(Debug, Clone, Copy)]
 pub struct ClientConfig {
     pub max_num_retries: usize,
     pub retry_backoff_ms: u64,
@@ -22,6 +26,21 @@ impl Default for ClientConfig {
             retry_base_ms: 250,
             retry_ceiling_ms: 2000,
             http_req_timeout_millis: 20_000,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct StreamConfig {
+    pub stop_on_head: bool,
+    pub head_poll_interval_millis: u64,
+}
+
+impl Default for StreamConfig {
+    fn default() -> Self {
+        Self {
+            stop_on_head: false,
+            head_poll_interval_millis: 1_000,
         }
     }
 }
@@ -85,70 +104,37 @@ impl Client {
         Ok(Some(parser.finish()))
     }
 
-    // pub fn evm_arrow_finalized_stream(self: Arc<Self>, query: evm::Query) -> mpsc::Receiver<Result<evm::ArrowResponse>> {
-    //     let (tx, rx) = mpsc::channel(10);
+    pub fn evm_arrow_finalized_stream(
+        self: Arc<Self>,
+        query: evm::Query,
+        config: StreamConfig,
+    ) -> Pin<Box<dyn Stream<Item = Result<evm::ArrowResponse>>>> {
+        let mut query = query;
+        // we need this to iterate
+        query.fields.block.number = true;
 
-    //     tokio::spawn(async move {
-    //         let mut query = query;
-    //         // we need this to iterate
-    //         query.fields.block.number = true;
+        Box::pin(async_stream::stream! {
+            loop {
+                let res = self.evm_arrow_finalized_query(&query).await.context("run query")?;
+                let res = match res {
+                    Some(r) => r,
+                    None => {
+                        if config.stop_on_head {
+                            break;
+                        }
+                        tokio::time::sleep(Duration::from_millis(config.head_poll_interval_millis)).await;
+                        continue;
+                    },
+                };
 
-    //         let height = match self.finalized_height().await {
-    //             Ok(h) => h,
-    //             Err(e) => {
-    //                 tx.send(Err(e)).await.ok();
-    //                 return;
-    //             }
-    //         };
+                let next_block = res.next_block().context("get next block from response")?;
 
-    //         query.to_block = Some(height);
+                query.from_block = next_block;
 
-    //         loop {
-    //             match self.evm_arrow_finalized_stream_next_batch(&mut query).await {
-    //                 Err(e) => {
-    //                     tx.send(Err(e)).await.ok();
-    //                     break;
-    //                 }
-    //                 Ok(res) => match res {
-    //                     None => {
-    //                         break;
-    //                     }
-    //                     Some((next_block, batch)) => {
-    //                         if let Some(tb) = query.to_block {
-    //                             if next_block == tb+1 {
-    //                                 done = true;
-    //                             }
-    //                         }
-
-    //                         if tx.send(Ok(Some(batch))).await.is_err() {
-    //                             log::debug!("closing stream since the receiver is dropped");
-    //                             break;
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     });
-
-    //     rx
-    // }
-
-    // async fn evm_arrow_finalized_stream_next_batch(&self, query: &evm::Query) -> Result<Option<(u64, evm::ArrowResponse)>> {
-    //     let height = self.finalized_height().await.context("get height")?;
-
-    //     let mut query_to_send = query.clone();
-    //     query_to_send.to_block = query_to_send.to_block.map(|tb| tb.min(height));
-
-    //     let res = self.evm_arrow_finalized_query(&query_to_send).await.context("run query")?;
-    //     let res = match res {
-    //         Some(r) => r,
-    //         None => return Ok(None),
-    //     };
-
-    //     let next_block = res.next_block().context("get next block from response")?;
-
-    //     Ok(Some((next_block, res)))
-    // }
+                yield Ok(res);
+            }
+        })
+    }
 
     pub async fn finalized_height(&self) -> Result<u64> {
         let res = self
@@ -251,6 +237,52 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures_lite::StreamExt;
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn dummy_stream() {
+        let url = "https://portal.sqd.dev/datasets/zksync-mainnet"
+            .parse()
+            .unwrap();
+        let client = Client::new(url, ClientConfig::default());
+
+        let query = evm::Query {
+            from_block: 0,
+            to_block: None,
+            logs: vec![evm::LogRequest::default()],
+            transactions: vec![evm::TransactionRequest::default()],
+            include_all_blocks: true,
+            fields: evm::Fields {
+                transaction: evm::TransactionFields {
+                    value: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            // fields: evm::Fields::all(),
+            ..Default::default()
+        };
+
+        let client = Arc::new(client);
+
+        let mut stream = client.evm_arrow_finalized_stream(query, StreamConfig::default());
+
+        while let Some(arrow_data) = stream.next().await {
+            let arrow_data = arrow_data.unwrap();
+            let tx_hash = arrow_data
+                .transactions
+                .column_by_name("value")
+                .unwrap()
+                .as_any()
+                .downcast_ref::<arrow::array::Decimal256Array>()
+                .unwrap();
+
+            for hash in tx_hash.iter().flatten() {
+                dbg!(hash.to_string());
+            }
+        }
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
