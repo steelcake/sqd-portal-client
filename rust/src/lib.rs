@@ -54,9 +54,12 @@ pub struct Client {
     retry_ceiling_ms: u64,
 }
 
+static APP_USER_AGENT: &str = concat!("sqd-portal-client-rust/", env!("CARGO_PKG_VERSION"),);
+
 impl Client {
     pub fn new(url: Url, config: ClientConfig) -> Self {
         let http_client = HttpClient::builder()
+            .user_agent(APP_USER_AGENT)
             .http1_only()
             .gzip(true)
             .timeout(Duration::from_millis(config.http_req_timeout_millis))
