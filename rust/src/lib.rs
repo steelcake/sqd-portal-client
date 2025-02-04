@@ -119,6 +119,12 @@ impl Client {
 
         Box::pin(async_stream::stream! {
             loop {
+                if let Some(tb) = query.to_block {
+                    if tb < query.from_block {
+                        break;
+                    }
+                }
+
                 let res = self.evm_arrow_finalized_query(&query).await.context("run query")?;
                 let res = match res {
                     Some(r) => r,
@@ -242,6 +248,51 @@ impl Client {
 mod tests {
     use super::*;
     use futures_lite::StreamExt;
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn check_stream_finishes_properly() {
+        let url = "https://portal.sqd.dev/datasets/ethereum-mainnet"
+            .parse()
+            .unwrap();
+        let client = Client::new(url, ClientConfig::default());
+
+        let query = evm::Query {
+            from_block: 18123123,
+            to_block: Some(18123222),
+            logs: vec![evm::LogRequest::default()],
+            transactions: vec![evm::TransactionRequest::default()],
+            include_all_blocks: true,
+            fields: evm::Fields {
+                transaction: evm::TransactionFields {
+                    value: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            // fields: evm::Fields::all(),
+            ..Default::default()
+        };
+
+        let client = Arc::new(client);
+
+        let mut stream = client.evm_arrow_finalized_stream(query, StreamConfig::default());
+
+        while let Some(arrow_data) = stream.next().await {
+            let arrow_data = arrow_data.unwrap();
+            let tx_hash = arrow_data
+                .transactions
+                .column_by_name("value")
+                .unwrap()
+                .as_any()
+                .downcast_ref::<arrow::array::Decimal256Array>()
+                .unwrap();
+
+            for hash in tx_hash.iter().flatten() {
+                dbg!(hash.to_string());
+            }
+        }
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]

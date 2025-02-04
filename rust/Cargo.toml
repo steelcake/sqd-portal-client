@@ -1,6 +1,6 @@
 [package]
 name = "sqd-portal-client"
-version = "0.0.4"
+version = "0.0.5"
 edition = "2021"
 description = "client for querying SQD portals"
 homepage = "https://github.com/steelcake/sqd-portal-client"
