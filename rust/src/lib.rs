@@ -1,11 +1,10 @@
-use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
-use futures_lite::Stream;
 use reqwest::{header::CONTENT_TYPE, Client as HttpClient, Method, StatusCode, Url};
+use tokio::sync::mpsc;
 
 pub mod evm;
 
@@ -34,6 +33,7 @@ impl Default for ClientConfig {
 pub struct StreamConfig {
     pub stop_on_head: bool,
     pub head_poll_interval_millis: u64,
+    pub buffer_size: usize,
 }
 
 impl Default for StreamConfig {
@@ -41,6 +41,7 @@ impl Default for StreamConfig {
         Self {
             stop_on_head: false,
             head_poll_interval_millis: 1_000,
+            buffer_size: 10,
         }
     }
 }
@@ -112,12 +113,14 @@ impl Client {
         self: Arc<Self>,
         query: evm::Query,
         config: StreamConfig,
-    ) -> Pin<Box<dyn Stream<Item = Result<evm::ArrowResponse>> + Send + Sync>> {
+    ) -> mpsc::Receiver<Result<evm::ArrowResponse>> {
+        let (tx, rx) = mpsc::channel(config.buffer_size);
+
         let mut query = query;
         // we need this to iterate
         query.fields.block.number = true;
 
-        Box::pin(async_stream::stream! {
+        tokio::spawn(async move {
             loop {
                 if let Some(tb) = query.to_block {
                     if tb < query.from_block {
@@ -125,25 +128,47 @@ impl Client {
                     }
                 }
 
-                let res = self.evm_arrow_finalized_query(&query).await.context("run query")?;
+                let res = match self
+                    .evm_arrow_finalized_query(&query)
+                    .await
+                    .context("run query")
+                {
+                    Ok(r) => r,
+                    Err(e) => {
+                        tx.send(Err(e)).await.ok();
+                        return;
+                    }
+                };
                 let res = match res {
                     Some(r) => r,
                     None => {
                         if config.stop_on_head {
                             break;
                         }
-                        tokio::time::sleep(Duration::from_millis(config.head_poll_interval_millis)).await;
+                        tokio::time::sleep(Duration::from_millis(config.head_poll_interval_millis))
+                            .await;
                         continue;
-                    },
+                    }
                 };
 
-                let next_block = res.next_block().context("get next block from response")?;
+                let next_block = match res.next_block().context("get next block from response") {
+                    Ok(nb) => nb,
+                    Err(e) => {
+                        tx.send(Err(e)).await.ok();
+                        return;
+                    }
+                };
 
                 query.from_block = next_block;
 
-                yield Ok(res);
+                if tx.send(Ok(res)).await.is_err() {
+                    log::debug!("receiver is closed so quitting stream");
+                    return;
+                }
             }
-        })
+        });
+
+        rx
     }
 
     pub async fn finalized_height(&self) -> Result<u64> {
@@ -247,7 +272,6 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures_lite::StreamExt;
 
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
@@ -276,9 +300,9 @@ mod tests {
 
         let client = Arc::new(client);
 
-        let mut stream = client.evm_arrow_finalized_stream(query, StreamConfig::default());
+        let mut receiver = client.evm_arrow_finalized_stream(query, StreamConfig::default());
 
-        while let Some(arrow_data) = stream.next().await {
+        while let Some(arrow_data) = receiver.recv().await {
             let arrow_data = arrow_data.unwrap();
             let tx_hash = arrow_data
                 .transactions
@@ -321,9 +345,9 @@ mod tests {
 
         let client = Arc::new(client);
 
-        let mut stream = client.evm_arrow_finalized_stream(query, StreamConfig::default());
+        let mut receiver = client.evm_arrow_finalized_stream(query, StreamConfig::default());
 
-        while let Some(arrow_data) = stream.next().await {
+        while let Some(arrow_data) = receiver.recv().await {
             let arrow_data = arrow_data.unwrap();
             let tx_hash = arrow_data
                 .transactions

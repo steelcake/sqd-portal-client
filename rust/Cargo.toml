@@ -1,6 +1,6 @@
 [package]
 name = "sqd-portal-client"
-version = "0.0.6"
+version = "0.0.7"
 edition = "2021"
 description = "client for querying SQD portals"
 homepage = "https://github.com/steelcake/sqd-portal-client"
@@ -16,7 +16,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 log = { workspace = true }
 rand = { workspace = true } 
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
 simd-json = "0.14"
 bytes = "1" 
 faster-hex = "0.10"
