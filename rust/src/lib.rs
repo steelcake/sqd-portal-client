@@ -112,7 +112,7 @@ impl Client {
         self: Arc<Self>,
         query: evm::Query,
         config: StreamConfig,
-    ) -> Pin<Box<dyn Stream<Item = Result<evm::ArrowResponse>>>> {
+    ) -> Pin<Box<dyn Stream<Item = Result<evm::ArrowResponse>> + Send + Sync>> {
         let mut query = query;
         // we need this to iterate
         query.fields.block.number = true;
