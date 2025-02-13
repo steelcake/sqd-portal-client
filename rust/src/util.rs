@@ -1,7 +1,7 @@
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
+use arrow::datatypes::i256;
 use simd_json::base::ValueAsScalar;
 use simd_json::derived::TypedScalarValue;
-use arrow::datatypes::i256;
 
 pub fn get_tape_array_of_u64(
     obj: &simd_json::tape::Object<'_, '_>,
@@ -66,7 +66,10 @@ pub fn get_tape_u8(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<
         .map(Some)
 }
 
-pub fn get_tape_string(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<String>> {
+pub fn get_tape_string(
+    obj: &simd_json::tape::Object<'_, '_>,
+    name: &str,
+) -> Result<Option<String>> {
     let val = match obj.get(name) {
         None => return Ok(None),
         Some(v) if v.is_null() => return Ok(None),

@@ -760,4 +760,3 @@ struct BlockInfo {
     number: Option<u64>,
     hash: Option<Vec<u8>>,
 }
-

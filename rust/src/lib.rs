@@ -78,7 +78,7 @@ impl Client {
             retry_ceiling_ms: config.retry_ceiling_ms,
         }
     }
-     
+
     pub async fn svm_arrow_finalized_query(
         &self,
         query: &svm::Query,
@@ -399,26 +399,16 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
-    async fn dummy() {
-        let url = "https://portal.sqd.dev/datasets/zksync-mainnet"
+    async fn dummy_svm() {
+        let url = "https://portal.sqd.dev/datasets/solana-mainnet"
             .parse()
             .unwrap();
         let client = Client::new(url, ClientConfig::default());
 
-        let query = evm::Query {
+        let query = svm::Query {
             from_block: 36963986,
             to_block: Some(36963986),
-            logs: vec![evm::LogRequest::default()],
-            transactions: vec![evm::TransactionRequest::default()],
-            include_all_blocks: true,
-            fields: evm::Fields {
-                transaction: evm::TransactionFields {
-                    value: true,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            // fields: evm::Fields::all(),
+            fields: svm::Fields::default(),
             ..Default::default()
         };
 
@@ -442,22 +432,22 @@ mod tests {
         // println!("{}", serde_json::to_string_pretty(&query).unwrap());
 
         let arrow_data = client
-            .evm_arrow_finalized_query(&query)
+            .svm_arrow_finalized_query(&query)
             .await
             .unwrap()
             .unwrap();
 
-        let tx_hash = arrow_data
-            .transactions
-            .column_by_name("value")
-            .unwrap()
-            .as_any()
-            .downcast_ref::<arrow::array::Decimal256Array>()
-            .unwrap();
+        // let tx_hash = arrow_data
+        //     .transactions
+        //     .column_by_name("value")
+        //     .unwrap()
+        //     .as_any()
+        //     .downcast_ref::<arrow::array::Decimal256Array>()
+        //     .unwrap();
 
-        for hash in tx_hash.iter().flatten() {
-            dbg!(hash.to_string());
-        }
+        // for hash in tx_hash.iter().flatten() {
+        //     dbg!(hash.to_string());
+        // }
 
         // dbg!(arrow_data);
     }

@@ -163,108 +163,159 @@ impl Fields {
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstructionFields {
-    salam: bool,
+    pub transaction_index: bool,
+    pub instruction_address: bool,
+    pub program_id: bool,
+    pub accounts: bool,
+    pub data: bool,
+    pub d1: bool,
+    pub d2: bool,
+    pub d4: bool,
+    pub d8: bool,
+    pub error: bool,
+    pub compute_units_consumed: bool,
+    pub is_committed: bool,
+    pub has_dropped_log_messages: bool,
 }
 
 impl InstructionFields {
     pub fn all() -> Self {
-        Self {
-            salam: true,
-        }
+        todo!()
     }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionFields {
-    salam: bool,
+    pub transaction_index: bool,
+    pub version: bool,
+    pub account_keys: bool,
+    pub address_table_lookups: bool,
+    pub num_readonly_signed_accounts: bool,
+    pub num_readonly_unsigned_accounts: bool,
+    pub num_required_signatures: bool,
+    pub recent_blockhash: bool,
+    pub signatures: bool,
+    pub err: bool,
+    pub fee: bool,
+    pub compute_units_consumed: bool,
+    pub loaded_addresses: bool,
+    pub fee_payer: bool,
+    pub has_dropped_log_messages: bool,
 }
 
 impl TransactionFields {
     pub fn all() -> Self {
-        Self {
-            salam: true,
-        }
+        todo!()
     }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogFields {
-    salam: bool,
+    pub transaction_index: bool,
+    pub log_index: bool,
+    pub instruction_address: bool,
+    pub program_id: bool,
+    pub kind: bool,
+    pub message: bool,
 }
 
 impl LogFields {
     pub fn all() -> Self {
-        Self {
-            salam: true,
-        }
+        todo!()
     }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BalanceFields {
-    salam: bool,
+    pub transaction_index: bool,
+    pub account: bool,
+    pub pre: bool,
+    pub post: bool,
 }
 
 impl BalanceFields {
     pub fn all() -> Self {
-        Self {
-            salam: true,
-        }
+        todo!()
     }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenBalanceFields {
-    salam: bool,
+    pub transaction_index: bool,
+    pub account: bool,
+    pub pre_mint: bool,
+    pub post_mint: bool,
+    pub pre_decimals: bool,
+    pub post_decimals: bool,
+    pub pre_program_id: bool,
+    pub post_program_id: bool,
+    pub pre_owner: bool,
+    pub post_owner: bool,
+    pub pre_amount: bool,
+    pub post_amount: bool,
 }
 
 impl TokenBalanceFields {
     pub fn all() -> Self {
-        Self {
-            salam: true,
-        }
+        todo!()
     }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RewardFields {
-    salam: bool,
+    pub pubkey: bool,
+    pub lamports: bool,
+    pub post_balance: bool,
+    pub reward_type: bool,
+    pub commission: bool,
 }
 
 impl RewardFields {
     pub fn all() -> Self {
-        Self {
-            salam: true,
-        }
+        todo!()
     }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockFields {
-    salam: bool,
+    pub number: bool,
+    pub hash: bool,
+    pub parent_number: bool,
+    pub parent_hash: bool,
+    pub height: bool,
+    pub timestamp: bool,
 }
 
 impl BlockFields {
     pub fn all() -> Self {
-        Self {
-            salam: true,
-        }
+        todo!()
+    }
+}
+
+#[derive(Debug)]
+pub struct ArrowResponse {}
+
+impl ArrowResponse {
+    pub fn next_block(&self) -> Result<u64> {
+        todo!()
     }
 }
 
 #[derive(Default)]
-pub(crate) struct ArrowResponseParser {
-    pub instruction: InstructionFields,
-    pub transaction: TransactionFields,
-    pub log: LogFields,
-    pub balance: BalanceFields,
-    pub token_balance: TokenBalanceFields,
-    pub reward: RewardFields,
-    pub block: BlockFields,
+pub(crate) struct ArrowResponseParser {}
+
+impl ArrowResponseParser {
+    pub(crate) fn parse_tape(&mut self, tape: &simd_json::tape::Tape<'_>) -> Result<()> {
+        todo!()
+    }
+
+    pub(crate) fn finish(self) -> ArrowResponse {
+        ArrowResponse {}
+    }
 }
