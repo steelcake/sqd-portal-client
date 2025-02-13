@@ -7,6 +7,8 @@ use reqwest::{header::CONTENT_TYPE, Client as HttpClient, Method, StatusCode, Ur
 use tokio::sync::mpsc;
 
 pub mod evm;
+pub mod svm;
+mod util;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ClientConfig {
@@ -75,6 +77,38 @@ impl Client {
             retry_base_ms: config.retry_base_ms,
             retry_ceiling_ms: config.retry_ceiling_ms,
         }
+    }
+     
+    pub async fn svm_arrow_finalized_query(
+        &self,
+        query: &svm::Query,
+    ) -> Result<Option<svm::ArrowResponse>> {
+        let query = simd_json::to_vec(query).context("serliaze query")?;
+        let query = bytes::Bytes::from(query);
+
+        let response = self.finalized_query(query).await.context("execute query")?;
+        let response = match response {
+            Some(r) => r,
+            None => return Ok(None),
+        };
+
+        let mut parser = svm::ArrowResponseParser::default();
+
+        let lines = response.split(|x| *x == b'\n');
+        let mut scratch = Vec::new();
+
+        for line in lines {
+            if line.is_empty() {
+                continue;
+            }
+
+            scratch.extend_from_slice(line);
+            let tape = simd_json::to_tape(&mut scratch).context("json to tape")?;
+            parser.parse_tape(&tape).context("parse tape")?;
+            scratch.clear();
+        }
+
+        Ok(Some(parser.finish()))
     }
 
     pub async fn evm_arrow_finalized_query(
