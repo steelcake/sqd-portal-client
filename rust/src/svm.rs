@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use arrow::array::UInt64Array;
 use arrow::{datatypes::i256, record_batch::RecordBatch};
-use cherry_evm_schema::{BlocksBuilder, LogsBuilder, TracesBuilder, TransactionsBuilder};
+use cherry_svm_schema::*;
 use serde::{Deserialize, Serialize};
 
 use crate::util::*;
@@ -299,7 +299,15 @@ impl BlockFields {
 }
 
 #[derive(Debug)]
-pub struct ArrowResponse {}
+pub struct ArrowResponse {
+    pub instructions: RecordBatch,
+    pub transactions: RecordBatch,
+    pub logs: RecordBatch,
+    pub balances: RecordBatch,
+    pub token_balances: RecordBatch,
+    pub rewards: RecordBatch,
+    pub blocks: RecordBatch,
+}
 
 impl ArrowResponse {
     pub fn next_block(&self) -> Result<u64> {
@@ -308,14 +316,58 @@ impl ArrowResponse {
 }
 
 #[derive(Default)]
-pub(crate) struct ArrowResponseParser {}
+pub(crate) struct ArrowResponseParser {
+    instructions: InstructionsBuilder,
+    transactions: TransactionsBuilder,
+    logs: LogsBuilder,
+    balances: BalancesBuilder,
+    token_balances: TokenBalancesBuilder,
+    rewards: RewardsBuilder,
+    blocks: BlocksBuilder,
+}
 
 impl ArrowResponseParser {
     pub(crate) fn parse_tape(&mut self, tape: &simd_json::tape::Tape<'_>) -> Result<()> {
+        let obj = tape.as_value().as_object().context("tape as object")?;
+        let header = obj.get("header").context("get header")?;
+
+        let header = header.as_object().context("header as object")?;
+        let block_info = self.parse_header(&header).context("parse block header")?;
+
+        // self.parse_transactions(&block_info, &obj)
+        //     .context("parse transactions")?;
+
+        // self.parse_logs(&block_info, &obj).context("parse logs")?;
+
+        // self.parse_traces(&block_info, &obj)
+        //     .context("parse traces")?;
+
+        Ok(())
+    }
+
+    fn parse_header(&mut self, header: &simd_json::tape::Object<'_, '_>) -> Result<BlockInfo> {
+        let slot = get_tape_u64(header, "number")?;
+        let hash = get_tape_hex(header, "hash")?;
+        let parent_slot = get_tape_hex(header, "parentNumber")?;
+        let parent_hash = get_tape_hex(header, "parentHash")?;
+
         todo!()
     }
 
     pub(crate) fn finish(self) -> ArrowResponse {
-        ArrowResponse {}
+        ArrowResponse {
+            instructions: self.instructions.finish(),
+            transactions: self.transactions.finish(),
+            logs: self.logs.finish(),
+            balances: self.balances.finish(),
+            token_balances: self.token_balances.finish(),
+            rewards: self.rewards.finish(),
+            blocks: self.blocks.finish(),
+        }
     }
+}
+
+struct BlockInfo {
+    slot: Option<u64>,
+    hash: Option<Vec<u8>>,
 }
