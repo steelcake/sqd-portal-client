@@ -8,7 +8,6 @@ use tokio::sync::mpsc;
 
 pub mod evm;
 pub mod svm;
-mod util;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ClientConfig {

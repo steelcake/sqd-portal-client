@@ -1,10 +1,13 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use arrow::array::UInt64Array;
 use arrow::{datatypes::i256, record_batch::RecordBatch};
-use cherry_svm_schema::*;
+use cherry_svm_schema::{
+    BalancesBuilder, BlocksBuilder, InstructionsBuilder, LogsBuilder, RewardsBuilder,
+    TokenBalancesBuilder, TransactionsBuilder,
+};
 use serde::{Deserialize, Serialize};
-
-use crate::util::*;
+use simd_json::base::ValueAsScalar;
+use simd_json::derived::TypedScalarValue;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -334,24 +337,207 @@ impl ArrowResponseParser {
         let header = header.as_object().context("header as object")?;
         let block_info = self.parse_header(&header).context("parse block header")?;
 
-        // self.parse_transactions(&block_info, &obj)
-        //     .context("parse transactions")?;
+        self.parse_rewards(&block_info, &obj)
+            .context("parse rewards")?;
 
-        // self.parse_logs(&block_info, &obj).context("parse logs")?;
+        self.parse_token_balances(&block_info, &obj)
+            .context("parse token balances")?;
 
-        // self.parse_traces(&block_info, &obj)
-        //     .context("parse traces")?;
+        self.parse_balances(&block_info, &obj)
+            .context("parse balances")?;
+
+        self.parse_logs(&block_info, &obj).context("parse logs")?;
+
+        self.parse_transactions(&block_info, &obj)
+            .context("parse transactions")?;
+
+        Ok(())
+    }
+
+    fn parse_logs(
+        &mut self,
+        block_info: &BlockInfo,
+        obj: &simd_json::tape::Object<'_, '_>,
+    ) -> Result<()> {
+        let logs = match obj.get("logs") {
+            Some(logs) => logs,
+            None => return Ok(()),
+        };
+
+        let logs = logs.as_array().context("logs as array")?;
+
+        for log in logs.iter() {
+            let obj = log.as_object().context("log as object")?;
+
+            let transaction_index = get_tape_u32(&obj, "transactionIndex")?;
+            let log_index = get_tape_u32(&obj, "logIndex")?;
+            let instruction_address = get_tape_base58(&obj, "instructionAddress")?;
+            let program_id = get_tape_base58(&obj, "programId")?;
+            let kind = get_tape_string(&obj, "kind")?;
+            let message = get_tape_string(&obj, "message")?;
+
+            self.logs.block_slot.append_option(block_info.slot);
+            self.logs.block_hash.append_option(block_info.hash.as_ref());
+            self.logs.transaction_index.append_option(transaction_index);
+            self.logs.log_index.append_option(log_index);
+            self.logs
+                .instruction_address
+                .append_option(instruction_address);
+            self.logs.program_id.append_option(program_id);
+            self.logs.kind.append_option(kind);
+            self.logs.message.append_option(message);
+        }
+
+        Ok(())
+    }
+
+    fn parse_balances(
+        &mut self,
+        block_info: &BlockInfo,
+        obj: &simd_json::tape::Object<'_, '_>,
+    ) -> Result<()> {
+        let balances = match obj.get("balances") {
+            Some(r) => r,
+            None => return Ok(()),
+        };
+
+        let balances = balances.as_array().context("balances as array")?;
+
+        for obj in balances.iter() {
+            let obj = obj.as_object().context("balance as object")?;
+
+            let transaction_index = get_tape_u32(&obj, "transactionIndex")?;
+            let account = get_tape_base58(&obj, "account")?;
+            let pre = get_tape_u64(&obj, "pre")?;
+            let post = get_tape_u64(&obj, "post")?;
+
+            self.balances.block_slot.append_option(block_info.slot);
+            self.balances
+                .block_hash
+                .append_option(block_info.hash.as_ref());
+            self.balances
+                .transaction_index
+                .append_option(transaction_index);
+            self.balances.account.append_option(account);
+            self.balances.pre.append_option(pre);
+            self.balances.post.append_option(post);
+        }
+
+        Ok(())
+    }
+
+    fn parse_rewards(
+        &mut self,
+        block_info: &BlockInfo,
+        obj: &simd_json::tape::Object<'_, '_>,
+    ) -> Result<()> {
+        let rewards = match obj.get("rewards") {
+            Some(r) => r,
+            None => return Ok(()),
+        };
+
+        let rewards = rewards.as_array().context("rewards as array")?;
+
+        for obj in rewards.iter() {
+            let obj = obj.as_object().context("reward as object")?;
+
+            let pubkey = get_tape_base58(&obj, "pubkey")?;
+            let lamports = get_tape_u64(&obj, "lamports")?;
+            let post_balance = get_tape_u64(&obj, "postBalance")?;
+            let reward_type = get_tape_string(&obj, "rewardType")?;
+            let commission = get_tape_u8(&obj, "commission")?;
+
+            self.rewards.block_slot.append_option(block_info.slot);
+            self.rewards
+                .block_hash
+                .append_option(block_info.hash.as_ref());
+            self.rewards.pubkey.append_option(pubkey);
+            self.rewards.lamports.append_option(lamports);
+            self.rewards.post_balance.append_option(post_balance);
+            self.rewards.reward_type.append_option(reward_type);
+            self.rewards.commission.append_option(commission);
+        }
+
+        Ok(())
+    }
+
+    fn parse_token_balances(
+        &mut self,
+        block_info: &BlockInfo,
+        obj: &simd_json::tape::Object<'_, '_>,
+    ) -> Result<()> {
+        let token_balances = match obj.get("tokenBalances") {
+            Some(r) => r,
+            None => return Ok(()),
+        };
+
+        let tb = token_balances
+            .as_array()
+            .context("token balances as array")?;
+
+        for obj in tb.iter() {
+            let obj = obj.as_object().context("token balance as object")?;
+
+            let transaction_index = get_tape_u32(&obj, "transactionIndex")?;
+            let account = get_tape_base58(&obj, "account")?;
+            let pre_mint = get_tape_base58(&obj, "preMint")?;
+            let post_mint = get_tape_base58(&obj, "postMint")?;
+            let pre_decimals = get_tape_u16(&obj, "preDecimals")?;
+            let post_decimals = get_tape_u16(&obj, "postDecimals")?;
+            let pre_program_id = get_tape_base58(&obj, "preProgramId")?;
+            let post_program_id = get_tape_base58(&obj, "postProgramId")?;
+            let pre_owner = get_tape_base58(&obj, "preOwner")?;
+            let post_owner = get_tape_base58(&obj, "postOwner")?;
+            let pre_amount = get_tape_u64(&obj, "preAmount")?;
+            let post_amount = get_tape_u64(&obj, "postAmount")?;
+
+            self.token_balances
+                .block_slot
+                .append_option(block_info.slot);
+            self.token_balances
+                .block_hash
+                .append_option(block_info.hash.as_ref());
+            self.token_balances
+                .transaction_index
+                .append_option(transaction_index);
+            self.token_balances.account.append_option(account);
+            self.token_balances.pre_mint.append_option(pre_mint);
+            self.token_balances.post_mint.append_option(post_mint);
+            self.token_balances.pre_decimals.append_option(pre_decimals);
+            self.token_balances
+                .post_decimals
+                .append_option(post_decimals);
+            self.token_balances
+                .pre_program_id
+                .append_option(pre_program_id);
+            self.token_balances
+                .post_program_id
+                .append_option(post_program_id);
+            self.token_balances.pre_owner.append_option(pre_owner);
+            self.token_balances.post_owner.append_option(post_owner);
+            self.token_balances.pre_amount.append_option(pre_amount);
+            self.token_balances.post_amount.append_option(post_amount);
+        }
 
         Ok(())
     }
 
     fn parse_header(&mut self, header: &simd_json::tape::Object<'_, '_>) -> Result<BlockInfo> {
         let slot = get_tape_u64(header, "number")?;
-        let hash = get_tape_hex(header, "hash")?;
-        let parent_slot = get_tape_hex(header, "parentNumber")?;
-        let parent_hash = get_tape_hex(header, "parentHash")?;
+        let hash = get_tape_base58(header, "hash")?;
+        let parent_slot = get_tape_u64(header, "parentNumber")?;
+        let parent_hash = get_tape_base58(header, "parentHash")?;
+        let height = get_tape_u64(header, "height")?;
+        let timestamp = get_tape_i64(header, "timestamp")?;
 
-        todo!()
+        self.blocks.slot.append_option(slot);
+        self.blocks.hash.append_option(hash.as_ref());
+        self.blocks.parent_slot.append_option(parent_slot);
+        self.blocks.parent_hash.append_option(parent_hash);
+        self.blocks.height.append_option(height);
+        self.blocks.timestamp.append_option(timestamp);
+
+        Ok(BlockInfo { slot, hash })
     }
 
     pub(crate) fn finish(self) -> ArrowResponse {
@@ -370,4 +556,141 @@ impl ArrowResponseParser {
 struct BlockInfo {
     slot: Option<u64>,
     hash: Option<Vec<u8>>,
+}
+
+fn decode_base58(data: &str) -> Result<Vec<u8>> {
+    bs58::decode(data)
+        .with_alphabet(bs58::Alphabet::BITCOIN)
+        .into_vec()
+        .context("base58 decode")
+}
+
+fn get_tape_array_of_u64(
+    obj: &simd_json::tape::Object<'_, '_>,
+    name: &str,
+) -> Result<Option<Vec<u64>>> {
+    let arr = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+    let arr = arr
+        .as_array()
+        .with_context(|| format!("{} as array", name))?;
+
+    let mut out = Vec::with_capacity(arr.len());
+
+    for v in arr.iter() {
+        let v = v
+            .as_u64()
+            .with_context(|| format!("element of {} as u64", name))?;
+        out.push(v);
+    }
+
+    Ok(Some(out))
+}
+
+fn get_tape_array_of_base58(
+    obj: &simd_json::tape::Object<'_, '_>,
+    name: &str,
+) -> Result<Option<Vec<Vec<u8>>>> {
+    let arr = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+    let arr = arr
+        .as_array()
+        .with_context(|| format!("{} as array", name))?;
+
+    let mut out = Vec::with_capacity(arr.len());
+
+    for v in arr.iter() {
+        let v = v
+            .as_str()
+            .with_context(|| format!("element of {} as str", name))?;
+        let v = decode_base58(v).with_context(|| format!("decode element of {} as hex", name))?;
+        out.push(v);
+    }
+
+    Ok(Some(out))
+}
+
+fn get_tape_u8(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u8>> {
+    let val = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+    val.as_u8()
+        .with_context(|| format!("{} as u8", name))
+        .map(Some)
+}
+
+fn get_tape_string(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<String>> {
+    let val = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+    val.as_str()
+        .with_context(|| format!("{} as str", name))
+        .map(|x| Some(x.to_owned()))
+}
+
+fn get_tape_u64(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u64>> {
+    let val = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+    val.as_u64()
+        .with_context(|| format!("get {} as u64", name))
+        .map(Some)
+}
+
+fn get_tape_u32(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u32>> {
+    let val = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+    val.as_u32()
+        .with_context(|| format!("get {} as u64", name))
+        .map(Some)
+}
+
+fn get_tape_u16(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u16>> {
+    let val = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+    val.as_u16()
+        .with_context(|| format!("get {} as u64", name))
+        .map(Some)
+}
+
+fn get_tape_i64(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<i64>> {
+    let val = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+    val.as_i64()
+        .with_context(|| format!("get {} as u64", name))
+        .map(Some)
+}
+
+fn get_tape_base58(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<Vec<u8>>> {
+    let hex = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+    let hex = hex.as_str().with_context(|| format!("{} as str", name))?;
+
+    decode_base58(hex)
+        .with_context(|| format!("prefix_hex_decode {}", name))
+        .map(Some)
 }
