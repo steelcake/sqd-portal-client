@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Context, Result};
-use arrow::array::{builder, UInt64Array};
-use arrow::{datatypes::i256, record_batch::RecordBatch};
+use arrow::array::builder;
+use arrow::record_batch::RecordBatch;
 use cherry_svm_schema::{
-    AddressTableLookupsBuilder, BalancesBuilder, BlocksBuilder, InstructionsBuilder, LogsBuilder,
+    BalancesBuilder, BlocksBuilder, InstructionsBuilder, LogsBuilder,
     RewardsBuilder, TokenBalancesBuilder, TransactionsBuilder,
 };
 use serde::{Deserialize, Serialize};
