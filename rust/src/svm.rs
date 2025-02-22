@@ -6,7 +6,7 @@ use cherry_svm_schema::{
     TokenBalancesBuilder, TransactionsBuilder,
 };
 use serde::{Deserialize, Serialize};
-use simd_json::base::ValueAsScalar;
+use simd_json::base::{TypedValue, ValueAsScalar};
 use simd_json::derived::TypedScalarValue;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -350,10 +350,10 @@ impl RewardFields {
 pub struct BlockFields {
     pub number: bool,
     pub hash: bool,
-    pub parent_number: bool,
-    pub parent_hash: bool,
-    pub height: bool,
-    pub timestamp: bool,
+    // pub parent_number: bool,
+    // pub parent_hash: bool,
+    // pub height: bool,
+    // pub timestamp: bool,
 }
 
 impl BlockFields {
@@ -361,10 +361,10 @@ impl BlockFields {
         BlockFields {
             number: true,
             hash: true,
-            parent_number: true,
-            parent_hash: true,
-            height: true,
-            timestamp: true,
+            // parent_number: true,
+            // parent_hash: true,
+            // height: true,
+            // timestamp: true,
         }
     }
 }
@@ -461,7 +461,7 @@ impl ArrowResponseParser {
             let d4 = get_tape_base58(&obj, "d4")?;
             let d8 = get_tape_base58(&obj, "d8")?;
             let error = get_tape_string(&obj, "error")?;
-            let compute_units_consumed = get_tape_u64(&obj, "computeUnitsConsumed")?;
+            let compute_units_consumed = get_tape_bigint(&obj, "computeUnitsConsumed")?;
             let is_committed = get_tape_bool(&obj, "isCommitted")?;
             let has_dropped_log_messages = get_tape_bool(&obj, "hasDroppedLogMessages")?;
 
@@ -561,8 +561,8 @@ impl ArrowResponseParser {
             let recent_blockhash = get_tape_base58(&obj, "recentBlockhash")?;
             let signatures = get_tape_array_of_base58(&obj, "signatures")?;
             let err = get_tape_string(&obj, "err")?;
-            let fee = get_tape_u64(&obj, "fee")?;
-            let compute_units_consumed = get_tape_u64(&obj, "computeUnitsConsumed")?;
+            let fee = get_tape_bigint(&obj, "fee")?;
+            let compute_units_consumed = get_tape_bigint(&obj, "computeUnitsConsumed")?;
             // loaded addresses will be read later
             let fee_payer = get_tape_base58(&obj, "feePayer")?;
             let has_dropped_log_messages = get_tape_bool(&obj, "hasDroppedLogMessages")?;
@@ -704,7 +704,7 @@ impl ArrowResponseParser {
 
             let transaction_index = get_tape_u32(&obj, "transactionIndex")?;
             let log_index = get_tape_u32(&obj, "logIndex")?;
-            let instruction_address = get_tape_base58(&obj, "instructionAddress")?;
+            let instruction_address = get_tape_array_of_u32(&obj, "instructionAddress")?;
             let program_id = get_tape_base58(&obj, "programId")?;
             let kind = get_tape_string(&obj, "kind")?;
             let message = get_tape_string(&obj, "message")?;
@@ -741,8 +741,8 @@ impl ArrowResponseParser {
 
             let transaction_index = get_tape_u32(&obj, "transactionIndex")?;
             let account = get_tape_base58(&obj, "account")?;
-            let pre = get_tape_u64(&obj, "pre")?;
-            let post = get_tape_u64(&obj, "post")?;
+            let pre = get_tape_bigint(&obj, "pre")?;
+            let post = get_tape_bigint(&obj, "post")?;
 
             self.balances.block_slot.append_option(block_info.slot);
             self.balances
@@ -775,8 +775,8 @@ impl ArrowResponseParser {
             let obj = obj.as_object().context("reward as object")?;
 
             let pubkey = get_tape_base58(&obj, "pubkey")?;
-            let lamports = get_tape_u64(&obj, "lamports")?;
-            let post_balance = get_tape_u64(&obj, "postBalance")?;
+            let lamports = get_tape_bigint(&obj, "lamports")?;
+            let post_balance = get_tape_bigint(&obj, "postBalance")?;
             let reward_type = get_tape_string(&obj, "rewardType")?;
             let commission = get_tape_u8(&obj, "commission")?;
 
@@ -821,8 +821,8 @@ impl ArrowResponseParser {
             let post_program_id = get_tape_base58(&obj, "postProgramId")?;
             let pre_owner = get_tape_base58(&obj, "preOwner")?;
             let post_owner = get_tape_base58(&obj, "postOwner")?;
-            let pre_amount = get_tape_u64(&obj, "preAmount")?;
-            let post_amount = get_tape_u64(&obj, "postAmount")?;
+            let pre_amount = get_tape_bigint(&obj, "preAmount")?;
+            let post_amount = get_tape_bigint(&obj, "postAmount")?;
 
             self.token_balances
                 .block_slot
@@ -857,6 +857,7 @@ impl ArrowResponseParser {
 
     fn parse_header(&mut self, header: &simd_json::tape::Object<'_, '_>) -> Result<BlockInfo> {
         let slot = get_tape_u64(header, "number")?;
+        dbg!(slot);
         let hash = get_tape_base58(header, "hash")?;
         let parent_slot = get_tape_u64(header, "parentNumber")?;
         let parent_hash = get_tape_base58(header, "parentHash")?;
@@ -1029,6 +1030,23 @@ fn get_tape_string(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<
         .map(|x| Some(x.to_owned()))
 }
 
+fn get_tape_bigint(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u64>> {
+    let val = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+
+    let val = val
+        .as_str()
+        .with_context(|| format!("get {} as str", name))?;
+
+    Ok(Some(
+        val.parse()
+            .with_context(|| format!("parse {} as u64", name))?,
+    ))
+}
+
 fn get_tape_u64(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u64>> {
     let val = match obj.get(name) {
         None => return Ok(None),
@@ -1036,7 +1054,7 @@ fn get_tape_u64(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Opt
         Some(v) => v,
     };
     val.as_u64()
-        .with_context(|| format!("get {} as u64", name))
+        .with_context(|| format!("get {} as u64, real type was: {}", name, val.value_type()))
         .map(Some)
 }
 

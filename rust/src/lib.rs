@@ -407,30 +407,26 @@ mod tests {
         let client = Client::new(url, ClientConfig::default());
 
         let query = svm::Query {
-            from_block: 36963986,
-            to_block: Some(36963986),
-            fields: svm::Fields::default(),
-            ..Default::default()
+            from_block: 300123123,
+            to_block: Some(300123143),
+            fields: svm::Fields {
+                transaction: svm::TransactionFields {
+                    recent_blockhash: false,
+                    ..svm::TransactionFields::all()
+                },
+                ..svm::Fields::all()
+            },
+            balances: vec![svm::BalanceRequest::default()],
+            include_all_blocks: true,
+            instructions: vec![svm::InstructionRequest::default()],
+            logs: vec![svm::LogRequest::default()],
+            rewards: vec![svm::RewardRequest::default()],
+            token_balances: vec![svm::TokenBalanceRequest::default()],
+            transactions: vec![svm::TransactionRequest::default()],
+            type_: Default::default(),
         };
 
         // dbg!(&query);
-
-        // let query: evm::Query = serde_json::from_value(serde_json::json!({
-        //     "from_block": 20123123,
-        //     "transactions": [
-        //         {
-        //             "from": ""
-        //         }
-        //     ],
-        //     "fields": {
-        //         "transaction": {
-        //             "from": true,
-        //             "to": true,
-        //         }
-        //     }
-        // })).unwrap();
-
-        // println!("{}", serde_json::to_string_pretty(&query).unwrap());
 
         let arrow_data = client
             .svm_arrow_finalized_query(&query)
@@ -438,17 +434,17 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        // let tx_hash = arrow_data
-        //     .transactions
-        //     .column_by_name("value")
-        //     .unwrap()
-        //     .as_any()
-        //     .downcast_ref::<arrow::array::Decimal256Array>()
-        //     .unwrap();
+        let tx_hash = arrow_data
+            .transactions
+            .column_by_name("block_slot")
+            .unwrap()
+            .as_any()
+            .downcast_ref::<arrow::array::UInt64Array>()
+            .unwrap();
 
-        // for hash in tx_hash.iter().flatten() {
-        //     dbg!(hash.to_string());
-        // }
+        for hash in tx_hash.iter().flatten() {
+            dbg!(hash.to_string());
+        }
 
         // dbg!(arrow_data);
     }
