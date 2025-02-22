@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Context, Result};
-use arrow::array::builder;
+use arrow::array::{builder, UInt64Array};
 use arrow::record_batch::RecordBatch;
 use cherry_svm_schema::{
-    BalancesBuilder, BlocksBuilder, InstructionsBuilder, LogsBuilder,
-    RewardsBuilder, TokenBalancesBuilder, TransactionsBuilder,
+    BalancesBuilder, BlocksBuilder, InstructionsBuilder, LogsBuilder, RewardsBuilder,
+    TokenBalancesBuilder, TransactionsBuilder,
 };
 use serde::{Deserialize, Serialize};
 use simd_json::base::ValueAsScalar;
@@ -183,7 +183,21 @@ pub struct InstructionFields {
 
 impl InstructionFields {
     pub fn all() -> Self {
-        todo!()
+        Self {
+            transaction_index: true,
+            instruction_address: true,
+            program_id: true,
+            accounts: true,
+            data: true,
+            d1: true,
+            d2: true,
+            d4: true,
+            d8: true,
+            error: true,
+            compute_units_consumed: true,
+            is_committed: true,
+            has_dropped_log_messages: true,
+        }
     }
 }
 
@@ -209,7 +223,23 @@ pub struct TransactionFields {
 
 impl TransactionFields {
     pub fn all() -> Self {
-        todo!()
+        Self {
+            transaction_index: true,
+            version: true,
+            account_keys: true,
+            address_table_lookups: true,
+            num_readonly_signed_accounts: true,
+            num_readonly_unsigned_accounts: true,
+            num_required_signatures: true,
+            recent_blockhash: true,
+            signatures: true,
+            err: true,
+            fee: true,
+            compute_units_consumed: true,
+            loaded_addresses: true,
+            fee_payer: true,
+            has_dropped_log_messages: true,
+        }
     }
 }
 
@@ -226,7 +256,14 @@ pub struct LogFields {
 
 impl LogFields {
     pub fn all() -> Self {
-        todo!()
+        Self {
+            transaction_index: true,
+            log_index: true,
+            instruction_address: true,
+            program_id: true,
+            kind: true,
+            message: true,
+        }
     }
 }
 
@@ -241,7 +278,12 @@ pub struct BalanceFields {
 
 impl BalanceFields {
     pub fn all() -> Self {
-        todo!()
+        Self {
+            transaction_index: true,
+            account: true,
+            pre: true,
+            post: true,
+        }
     }
 }
 
@@ -264,7 +306,20 @@ pub struct TokenBalanceFields {
 
 impl TokenBalanceFields {
     pub fn all() -> Self {
-        todo!()
+        Self {
+            transaction_index: true,
+            account: true,
+            pre_mint: true,
+            post_mint: true,
+            pre_decimals: true,
+            post_decimals: true,
+            pre_program_id: true,
+            post_program_id: true,
+            pre_owner: true,
+            post_owner: true,
+            pre_amount: true,
+            post_amount: true,
+        }
     }
 }
 
@@ -280,7 +335,13 @@ pub struct RewardFields {
 
 impl RewardFields {
     pub fn all() -> Self {
-        todo!()
+        Self {
+            pubkey: true,
+            lamports: true,
+            post_balance: true,
+            reward_type: true,
+            commission: true,
+        }
     }
 }
 
@@ -297,7 +358,14 @@ pub struct BlockFields {
 
 impl BlockFields {
     pub fn all() -> Self {
-        todo!()
+        BlockFields {
+            number: true,
+            hash: true,
+            parent_number: true,
+            parent_hash: true,
+            height: true,
+            timestamp: true,
+        }
     }
 }
 
@@ -314,7 +382,18 @@ pub struct ArrowResponse {
 
 impl ArrowResponse {
     pub fn next_block(&self) -> Result<u64> {
-        todo!()
+        let numbers = self
+            .blocks
+            .column_by_name("slot")
+            .context("get slot col")?
+            .as_any()
+            .downcast_ref::<UInt64Array>()
+            .context("get slot col as u64")?;
+        numbers
+            .values()
+            .last()
+            .context("get last value from block slots")
+            .map(|v| *v + 1)
     }
 }
 
@@ -350,6 +429,109 @@ impl ArrowResponseParser {
 
         self.parse_transactions(&block_info, &obj)
             .context("parse transactions")?;
+
+        self.parse_instructions(&block_info, &obj)
+            .context("parse instructions")?;
+
+        Ok(())
+    }
+
+    fn parse_instructions(
+        &mut self,
+        block_info: &BlockInfo,
+        obj: &simd_json::tape::Object<'_, '_>,
+    ) -> Result<()> {
+        let instructions = match obj.get("instructions") {
+            Some(inst) => inst,
+            None => return Ok(()),
+        };
+
+        let instructions = instructions.as_array().context("instructions as array")?;
+
+        for inst in instructions.iter() {
+            let obj = inst.as_object().context("instruction as object")?;
+
+            let transaction_index = get_tape_u32(&obj, "transactionIndex")?;
+            let instruction_address = get_tape_array_of_u32(&obj, "instructionAddress")?;
+            let program_id = get_tape_base58(&obj, "programId")?;
+            let accounts = get_tape_array_of_base58(&obj, "accounts")?;
+            let data = get_tape_base58(&obj, "data")?;
+            let d1 = get_tape_base58(&obj, "d1")?;
+            let d2 = get_tape_base58(&obj, "d2")?;
+            let d4 = get_tape_base58(&obj, "d4")?;
+            let d8 = get_tape_base58(&obj, "d8")?;
+            let error = get_tape_string(&obj, "error")?;
+            let compute_units_consumed = get_tape_u64(&obj, "computeUnitsConsumed")?;
+            let is_committed = get_tape_bool(&obj, "isCommitted")?;
+            let has_dropped_log_messages = get_tape_bool(&obj, "hasDroppedLogMessages")?;
+
+            self.instructions.block_slot.append_option(block_info.slot);
+            self.instructions
+                .block_hash
+                .append_option(block_info.hash.as_ref());
+            self.instructions
+                .transaction_index
+                .append_option(transaction_index);
+            self.instructions
+                .instruction_address
+                .append_option(instruction_address.map(|v| v.into_iter().map(Some)));
+            self.instructions.program_id.append_option(program_id);
+            self.instructions
+                .a0
+                .append_option(accounts.as_ref().and_then(|a| a.get(0)));
+            self.instructions
+                .a1
+                .append_option(accounts.as_ref().and_then(|a| a.get(1)));
+            self.instructions
+                .a2
+                .append_option(accounts.as_ref().and_then(|a| a.get(2)));
+            self.instructions
+                .a3
+                .append_option(accounts.as_ref().and_then(|a| a.get(3)));
+            self.instructions
+                .a4
+                .append_option(accounts.as_ref().and_then(|a| a.get(4)));
+            self.instructions
+                .a5
+                .append_option(accounts.as_ref().and_then(|a| a.get(5)));
+            self.instructions
+                .a6
+                .append_option(accounts.as_ref().and_then(|a| a.get(6)));
+            self.instructions
+                .a7
+                .append_option(accounts.as_ref().and_then(|a| a.get(7)));
+            self.instructions
+                .a8
+                .append_option(accounts.as_ref().and_then(|a| a.get(8)));
+            self.instructions
+                .a9
+                .append_option(accounts.as_ref().and_then(|a| a.get(9)));
+            self.instructions
+                .rest_of_accounts
+                .append_option(match accounts.as_ref() {
+                    Some(ac) => {
+                        if ac.len() > 10 {
+                            Some(ac[10..].iter().map(Some))
+                        } else {
+                            None
+                        }
+                    }
+                    None => None,
+                });
+            self.instructions.data.append_option(data);
+            self.instructions.d1.append_option(d1);
+            self.instructions.d2.append_option(d2);
+            self.instructions.d4.append_option(d4);
+            self.instructions.d8.append_option(d8);
+            self.instructions.error.append_option(error);
+            self.instructions
+                .compute_units_consumed
+                .append_option(compute_units_consumed);
+            self.instructions.is_committed.append_option(is_committed);
+            self.instructions
+                .has_dropped_log_messages
+                .append_option(has_dropped_log_messages);
+        }
 
         Ok(())
     }
@@ -714,6 +896,31 @@ fn decode_base58(data: &str) -> Result<Vec<u8>> {
         .with_alphabet(bs58::Alphabet::BITCOIN)
         .into_vec()
         .context("base58 decode")
+}
+
+fn get_tape_array_of_u32(
+    obj: &simd_json::tape::Object<'_, '_>,
+    name: &str,
+) -> Result<Option<Vec<u32>>> {
+    let arr = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+    let arr = arr
+        .as_array()
+        .with_context(|| format!("{} as array", name))?;
+
+    let mut out = Vec::with_capacity(arr.len());
+
+    for v in arr.iter() {
+        let v = v
+            .as_u32()
+            .with_context(|| format!("element of {} as u32", name))?;
+        out.push(v);
+    }
+
+    Ok(Some(out))
 }
 
 fn get_tape_array_of_u64(
