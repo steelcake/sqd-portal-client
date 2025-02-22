@@ -709,7 +709,7 @@ impl ArrowResponseParser {
         let l1_block_number = get_tape_u64(header, "l1BlockNumber")?;
 
         self.blocks.number.append_option(number);
-        self.blocks.hash.append_option(hash.clone());
+        self.blocks.hash.append_option(hash.as_ref());
         self.blocks.parent_hash.append_option(parent_hash);
         self.blocks.nonce.append_option(nonce);
         self.blocks.sha3_uncles.append_option(sha3_uncles);

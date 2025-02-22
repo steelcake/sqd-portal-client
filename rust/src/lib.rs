@@ -1,3 +1,5 @@
+#![allow(clippy::get_first)]
+
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -7,6 +9,7 @@ use reqwest::{header::CONTENT_TYPE, Client as HttpClient, Method, StatusCode, Ur
 use tokio::sync::mpsc;
 
 pub mod evm;
+pub mod svm;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ClientConfig {
@@ -75,6 +78,38 @@ impl Client {
             retry_base_ms: config.retry_base_ms,
             retry_ceiling_ms: config.retry_ceiling_ms,
         }
+    }
+
+    pub async fn svm_arrow_finalized_query(
+        &self,
+        query: &svm::Query,
+    ) -> Result<Option<svm::ArrowResponse>> {
+        let query = simd_json::to_vec(query).context("serliaze query")?;
+        let query = bytes::Bytes::from(query);
+
+        let response = self.finalized_query(query).await.context("execute query")?;
+        let response = match response {
+            Some(r) => r,
+            None => return Ok(None),
+        };
+
+        let mut parser = svm::ArrowResponseParser::default();
+
+        let lines = response.split(|x| *x == b'\n');
+        let mut scratch = Vec::new();
+
+        for line in lines {
+            if line.is_empty() {
+                continue;
+            }
+
+            scratch.extend_from_slice(line);
+            let tape = simd_json::to_tape(&mut scratch).context("json to tape")?;
+            parser.parse_tape(&tape).context("parse tape")?;
+            scratch.clear();
+        }
+
+        Ok(Some(parser.finish()))
     }
 
     pub async fn evm_arrow_finalized_query(
@@ -365,60 +400,52 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
-    async fn dummy() {
-        let url = "https://portal.sqd.dev/datasets/zksync-mainnet"
+    async fn dummy_svm() {
+        let url = "https://portal.sqd.dev/datasets/solana-mainnet"
             .parse()
             .unwrap();
-        let client = Client::new(url, ClientConfig::default());
-
-        let query = evm::Query {
-            from_block: 36963986,
-            to_block: Some(36963986),
-            logs: vec![evm::LogRequest::default()],
-            transactions: vec![evm::TransactionRequest::default()],
-            include_all_blocks: true,
-            fields: evm::Fields {
-                transaction: evm::TransactionFields {
-                    value: true,
-                    ..Default::default()
-                },
+        let client = Client::new(
+            url,
+            ClientConfig {
+                max_num_retries: 0,
                 ..Default::default()
             },
-            // fields: evm::Fields::all(),
-            ..Default::default()
+        );
+
+        let query = svm::Query {
+            from_block: 300123123,
+            to_block: Some(300123143),
+            fields: svm::Fields {
+                transaction: svm::TransactionFields {
+                    recent_blockhash: false,
+                    ..svm::TransactionFields::all()
+                },
+                ..svm::Fields::all()
+            },
+            balances: vec![svm::BalanceRequest::default()],
+            include_all_blocks: true,
+            instructions: vec![svm::InstructionRequest::default()],
+            logs: vec![svm::LogRequest::default()],
+            rewards: vec![svm::RewardRequest::default()],
+            token_balances: vec![svm::TokenBalanceRequest::default()],
+            transactions: vec![svm::TransactionRequest::default()],
+            type_: Default::default(),
         };
 
         // dbg!(&query);
 
-        // let query: evm::Query = serde_json::from_value(serde_json::json!({
-        //     "from_block": 20123123,
-        //     "transactions": [
-        //         {
-        //             "from": ""
-        //         }
-        //     ],
-        //     "fields": {
-        //         "transaction": {
-        //             "from": true,
-        //             "to": true,
-        //         }
-        //     }
-        // })).unwrap();
-
-        // println!("{}", serde_json::to_string_pretty(&query).unwrap());
-
         let arrow_data = client
-            .evm_arrow_finalized_query(&query)
+            .svm_arrow_finalized_query(&query)
             .await
             .unwrap()
             .unwrap();
 
         let tx_hash = arrow_data
             .transactions
-            .column_by_name("value")
+            .column_by_name("block_slot")
             .unwrap()
             .as_any()
-            .downcast_ref::<arrow::array::Decimal256Array>()
+            .downcast_ref::<arrow::array::UInt64Array>()
             .unwrap();
 
         for hash in tx_hash.iter().flatten() {
