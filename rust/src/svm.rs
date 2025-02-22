@@ -350,9 +350,8 @@ impl RewardFields {
 pub struct BlockFields {
     pub number: bool,
     pub hash: bool,
-    // pub parent_number: bool,
+    // pub parent_slot: bool,
     // pub parent_hash: bool,
-    // pub height: bool,
     // pub timestamp: bool,
 }
 
@@ -361,9 +360,8 @@ impl BlockFields {
         BlockFields {
             number: true,
             hash: true,
-            // parent_number: true,
+            // parent_slot: true,
             // parent_hash: true,
-            // height: true,
             // timestamp: true,
         }
     }
@@ -857,19 +855,22 @@ impl ArrowResponseParser {
 
     fn parse_header(&mut self, header: &simd_json::tape::Object<'_, '_>) -> Result<BlockInfo> {
         let slot = get_tape_u64(header, "number")?;
-        dbg!(slot);
         let hash = get_tape_base58(header, "hash")?;
-        let parent_slot = get_tape_u64(header, "parentNumber")?;
-        let parent_hash = get_tape_base58(header, "parentHash")?;
-        let height = get_tape_u64(header, "height")?;
-        let timestamp = get_tape_i64(header, "timestamp")?;
+        // let parent_slot = get_tape_u64(header, "parentSlot")?;
+        // let parent_hash = get_tape_base58(header, "parentHash")?;
+        // let height = get_tape_u64(header, "height")?;
+        // let timestamp = get_tape_i64(header, "timestamp")?;
 
         self.blocks.slot.append_option(slot);
         self.blocks.hash.append_option(hash.as_ref());
-        self.blocks.parent_slot.append_option(parent_slot);
-        self.blocks.parent_hash.append_option(parent_hash);
-        self.blocks.height.append_option(height);
-        self.blocks.timestamp.append_option(timestamp);
+        // self.blocks.parent_slot.append_option(parent_slot);
+        // self.blocks.parent_hash.append_option(parent_hash);
+        // self.blocks.height.append_option(height);
+        // self.blocks.timestamp.append_option(timestamp);
+        self.blocks.parent_slot.append_null();
+        self.blocks.parent_hash.append_null();
+        self.blocks.height.append_null();
+        self.blocks.timestamp.append_null();
 
         Ok(BlockInfo { slot, hash })
     }
@@ -1128,16 +1129,16 @@ fn get_tape_u16(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Opt
         .map(Some)
 }
 
-fn get_tape_i64(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<i64>> {
-    let val = match obj.get(name) {
-        None => return Ok(None),
-        Some(v) if v.is_null() => return Ok(None),
-        Some(v) => v,
-    };
-    val.as_i64()
-        .with_context(|| format!("get {} as i64", name))
-        .map(Some)
-}
+// fn get_tape_i64(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<i64>> {
+//     let val = match obj.get(name) {
+//         None => return Ok(None),
+//         Some(v) if v.is_null() => return Ok(None),
+//         Some(v) => v,
+//     };
+//     val.as_i64()
+//         .with_context(|| format!("get {} as i64", name))
+//         .map(Some)
+// }
 
 fn get_tape_base58(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<Vec<u8>>> {
     let hex = match obj.get(name) {

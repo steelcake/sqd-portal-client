@@ -404,7 +404,13 @@ mod tests {
         let url = "https://portal.sqd.dev/datasets/solana-mainnet"
             .parse()
             .unwrap();
-        let client = Client::new(url, ClientConfig::default());
+        let client = Client::new(
+            url,
+            ClientConfig {
+                max_num_retries: 0,
+                ..Default::default()
+            },
+        );
 
         let query = svm::Query {
             from_block: 300123123,
