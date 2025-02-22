@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use arrow::array::{builder, UInt64Array};
 use arrow::record_batch::RecordBatch;
 use cherry_svm_schema::{
@@ -456,10 +456,10 @@ impl ArrowResponseParser {
             let program_id = get_tape_base58(&obj, "programId")?;
             let accounts = get_tape_array_of_base58(&obj, "accounts")?;
             let data = get_tape_base58(&obj, "data")?;
-            let d1 = get_tape_base58(&obj, "d1")?;
-            let d2 = get_tape_base58(&obj, "d2")?;
-            let d4 = get_tape_base58(&obj, "d4")?;
-            let d8 = get_tape_base58(&obj, "d8")?;
+            let d1 = get_tape_hex(&obj, "d1")?;
+            let d2 = get_tape_hex(&obj, "d2")?;
+            let d4 = get_tape_hex(&obj, "d4")?;
+            let d8 = get_tape_hex(&obj, "d8")?;
             let error = get_tape_string(&obj, "error")?;
             let compute_units_consumed = get_tape_bigint(&obj, "computeUnitsConsumed")?;
             let is_committed = get_tape_bool(&obj, "isCommitted")?;
@@ -554,16 +554,16 @@ impl ArrowResponseParser {
             let transaction_index = get_tape_u32(&obj, "transactionIndex")?;
             let version = get_tape_version(&obj, "version")?;
             let account_keys = get_tape_array_of_base58(&obj, "accountKeys")?;
-            // address table lookups will be read later
+            // address_table_lookups will be read later
             let num_readonly_signed_accounts = get_tape_u32(&obj, "numReadonlySignedAccounts")?;
             let num_readonly_unsigned_accounts = get_tape_u32(&obj, "numReadonlyUnsignedAccounts")?;
             let num_required_signatures = get_tape_u32(&obj, "numRequiredSignatures")?;
             let recent_blockhash = get_tape_base58(&obj, "recentBlockhash")?;
             let signatures = get_tape_array_of_base58(&obj, "signatures")?;
-            let err = get_tape_string(&obj, "err")?;
+            let err = get_tape_json_string(&obj, "err")?;
             let fee = get_tape_bigint(&obj, "fee")?;
             let compute_units_consumed = get_tape_bigint(&obj, "computeUnitsConsumed")?;
-            // loaded addresses will be read later
+            // loaded_addresses will be read later
             let fee_payer = get_tape_base58(&obj, "feePayer")?;
             let has_dropped_log_messages = get_tape_bool(&obj, "hasDroppedLogMessages")?;
 
@@ -669,7 +669,7 @@ impl ArrowResponseParser {
                 }
                 {
                     let b = atl_builder
-                        .field_builder::<builder::ListBuilder<builder::UInt64Builder>>(0)
+                        .field_builder::<builder::ListBuilder<builder::UInt64Builder>>(2)
                         .unwrap();
 
                     let v = get_tape_array_of_u64(&v, "readonlyIndexes")?;
@@ -896,7 +896,40 @@ fn decode_base58(data: &str) -> Result<Vec<u8>> {
     bs58::decode(data)
         .with_alphabet(bs58::Alphabet::BITCOIN)
         .into_vec()
-        .context("base58 decode")
+        .with_context(|| format!("base58 decode val {}", data))
+}
+
+fn get_tape_hex(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<Vec<u8>>> {
+    let hex = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+    let hex = hex.as_str().with_context(|| format!("{} as str", name))?;
+
+    decode_prefixed_hex(hex)
+        .with_context(|| format!("prefix_hex_decode {}", name))
+        .map(Some)
+}
+
+fn decode_prefixed_hex(val: &str) -> Result<Vec<u8>> {
+    let val = val.strip_prefix("0x").context("invalid hex prefix")?;
+
+    if val.len() % 2 == 0 {
+        decode_hex(val)
+    } else {
+        let val = format!("0{val}");
+        decode_hex(val.as_str())
+    }
+}
+
+fn decode_hex(hex: &str) -> Result<Vec<u8>> {
+    let len = hex.as_bytes().len();
+    let mut dst = vec![0; len / 2];
+
+    faster_hex::hex_decode(hex.as_bytes(), &mut dst)?;
+
+    Ok(dst)
 }
 
 fn get_tape_array_of_u32(
@@ -1028,6 +1061,21 @@ fn get_tape_string(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<
     val.as_str()
         .with_context(|| format!("{} as str", name))
         .map(|x| Some(x.to_owned()))
+}
+
+fn get_tape_json_string(
+    obj: &simd_json::tape::Object<'_, '_>,
+    name: &str,
+) -> Result<Option<String>> {
+    use simd_json::prelude::Writable;
+
+    let val = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+
+    Ok(Some(val.encode()))
 }
 
 fn get_tape_bigint(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u64>> {
