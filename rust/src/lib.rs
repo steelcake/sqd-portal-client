@@ -112,6 +112,68 @@ impl Client {
         Ok(Some(parser.finish()))
     }
 
+    pub fn svm_arrow_finalized_stream(
+        self: Arc<Self>,
+        query: svm::Query,
+        config: StreamConfig,
+    ) -> mpsc::Receiver<Result<svm::ArrowResponse>> {
+        let (tx, rx) = mpsc::channel(config.buffer_size);
+
+        let mut query = query;
+        // we need this to iterate
+        query.fields.block.number = true;
+
+        tokio::spawn(async move {
+            loop {
+                if let Some(tb) = query.to_block {
+                    if tb < query.from_block {
+                        break;
+                    }
+                }
+
+                let res = match self
+                    .svm_arrow_finalized_query(&query)
+                    .await
+                    .context("run query")
+                {
+                    Ok(r) => r,
+                    Err(e) => {
+                        tx.send(Err(e)).await.ok();
+                        return;
+                    }
+                };
+                let res = match res {
+                    Some(r) => r,
+                    None => {
+                        if config.stop_on_head {
+                            break;
+                        }
+                        tokio::time::sleep(Duration::from_millis(config.head_poll_interval_millis))
+                            .await;
+                        continue;
+                    }
+                };
+
+                let next_block = match res.next_block().context("get next block from response") {
+                    Ok(nb) => nb,
+                    Err(e) => {
+                        tx.send(Err(e)).await.ok();
+                        return;
+                    }
+                };
+
+                query.from_block = next_block;
+
+                if tx.send(Ok(res)).await.is_err() {
+                    log::debug!("receiver is closed so quitting stream");
+                    return;
+                }
+            }
+        });
+
+        rx
+    }
+
     pub async fn evm_arrow_finalized_query(
         &self,
         query: &evm::Query,
@@ -307,6 +369,54 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn check_stream_finishes_properly_svm() {
+        let url = "https://portal.sqd.dev/datasets/solana-mainnet"
+            .parse()
+            .unwrap();
+        let client = Client::new(url, ClientConfig::default());
+
+        let query = svm::Query {
+            from_block: 300123123,
+            to_block: Some(300123143),
+            fields: svm::Fields {
+                transaction: svm::TransactionFields {
+                    recent_blockhash: false,
+                    ..svm::TransactionFields::all()
+                },
+                ..svm::Fields::all()
+            },
+            balances: vec![svm::BalanceRequest::default()],
+            include_all_blocks: true,
+            instructions: vec![svm::InstructionRequest::default()],
+            logs: vec![svm::LogRequest::default()],
+            rewards: vec![svm::RewardRequest::default()],
+            token_balances: vec![svm::TokenBalanceRequest::default()],
+            transactions: vec![svm::TransactionRequest::default()],
+            type_: Default::default(),
+        };
+
+        let client = Arc::new(client);
+
+        let mut receiver = client.svm_arrow_finalized_stream(query, StreamConfig::default());
+
+        while let Some(arrow_data) = receiver.recv().await {
+            let arrow_data = arrow_data.unwrap();
+            let tx_hash = arrow_data
+                .transactions
+                .column_by_name("block_slot")
+                .unwrap()
+                .as_any()
+                .downcast_ref::<arrow::array::UInt64Array>()
+                .unwrap();
+
+            for hash in tx_hash.iter().flatten() {
+                dbg!(hash.to_string());
+            }
+        }
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
