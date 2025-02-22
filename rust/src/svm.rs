@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Context, Result};
-use arrow::array::UInt64Array;
+use arrow::array::{builder, UInt64Array};
 use arrow::{datatypes::i256, record_batch::RecordBatch};
 use cherry_svm_schema::{
-    BalancesBuilder, BlocksBuilder, InstructionsBuilder, LogsBuilder, RewardsBuilder,
-    TokenBalancesBuilder, TransactionsBuilder,
+    AddressTableLookupsBuilder, BalancesBuilder, BlocksBuilder, InstructionsBuilder, LogsBuilder,
+    RewardsBuilder, TokenBalancesBuilder, TransactionsBuilder,
 };
 use serde::{Deserialize, Serialize};
 use simd_json::base::ValueAsScalar;
@@ -354,6 +354,157 @@ impl ArrowResponseParser {
         Ok(())
     }
 
+    fn parse_transactions(
+        &mut self,
+        block_info: &BlockInfo,
+        obj: &simd_json::tape::Object<'_, '_>,
+    ) -> Result<()> {
+        let transactions = match obj.get("transactions") {
+            Some(txs) => txs,
+            None => return Ok(()),
+        };
+
+        let transactions = transactions.as_array().context("transactions as array")?;
+
+        for tx in transactions.iter() {
+            let obj = tx.as_object().context("transaction as object")?;
+
+            let transaction_index = get_tape_u32(&obj, "transactionIndex")?;
+            let version = get_tape_version(&obj, "version")?;
+            let account_keys = get_tape_array_of_base58(&obj, "accountKeys")?;
+            // address table lookups will be read later
+            let num_readonly_signed_accounts = get_tape_u32(&obj, "numReadonlySignedAccounts")?;
+            let num_readonly_unsigned_accounts = get_tape_u32(&obj, "numReadonlyUnsignedAccounts")?;
+            let num_required_signatures = get_tape_u32(&obj, "numRequiredSignatures")?;
+            let recent_blockhash = get_tape_base58(&obj, "recentBlockhash")?;
+            let signatures = get_tape_array_of_base58(&obj, "signatures")?;
+            let err = get_tape_string(&obj, "err")?;
+            let fee = get_tape_u64(&obj, "fee")?;
+            let compute_units_consumed = get_tape_u64(&obj, "computeUnitsConsumed")?;
+            // loaded addresses will be read later
+            let fee_payer = get_tape_base58(&obj, "feePayer")?;
+            let has_dropped_log_messages = get_tape_bool(&obj, "hasDroppedLogMessages")?;
+
+            self.transactions.block_slot.append_option(block_info.slot);
+            self.transactions
+                .block_hash
+                .append_option(block_info.hash.as_ref());
+            self.transactions
+                .transaction_index
+                .append_option(transaction_index);
+            self.transactions.version.append_option(version);
+            self.transactions
+                .account_keys
+                .append_option(account_keys.map(|v| v.into_iter().map(Some)));
+
+            self.parse_address_table_lookups(&obj)
+                .context("parse address table lookups")?;
+
+            self.transactions
+                .num_readonly_signed_accounts
+                .append_option(num_readonly_signed_accounts);
+            self.transactions
+                .num_readonly_unsigned_accounts
+                .append_option(num_readonly_unsigned_accounts);
+            self.transactions
+                .num_required_signatures
+                .append_option(num_required_signatures);
+            self.transactions
+                .recent_blockhash
+                .append_option(recent_blockhash);
+            self.transactions
+                .signatures
+                .append_option(signatures.map(|v| v.into_iter().map(Some)));
+            self.transactions.err.append_option(err);
+            self.transactions.fee.append_option(fee);
+            self.transactions
+                .compute_units_consumed
+                .append_option(compute_units_consumed);
+
+            self.parse_loaded_addresses(&obj)
+                .context("parse loaded addresses")?;
+
+            self.transactions.fee_payer.append_option(fee_payer);
+            self.transactions
+                .has_dropped_log_messages
+                .append_option(has_dropped_log_messages);
+        }
+
+        Ok(())
+    }
+
+    fn parse_loaded_addresses(&mut self, obj: &simd_json::tape::Object<'_, '_>) -> Result<()> {
+        let v = match obj.get("loadedAddresses") {
+            Some(v) if v.is_null() => {
+                self.transactions.loaded_readonly_addresses.append_null();
+                self.transactions.loaded_writeable_addresses.append_null();
+                return Ok(());
+            }
+            None => {
+                self.transactions.loaded_readonly_addresses.append_null();
+                self.transactions.loaded_writeable_addresses.append_null();
+                return Ok(());
+            }
+            Some(v) => v,
+        };
+
+        let v = v.as_object().context("loaded addresses as object")?;
+
+        let readonly = get_tape_array_of_base58(&v, "readonly")?.context("readonly is null")?;
+        self.transactions
+            .loaded_readonly_addresses
+            .append_value(readonly.into_iter().map(Some));
+        let writeable = get_tape_array_of_base58(&v, "writeable")?.context("writeable is null")?;
+        self.transactions
+            .loaded_writeable_addresses
+            .append_value(writeable.into_iter().map(Some));
+
+        Ok(())
+    }
+
+    fn parse_address_table_lookups(&mut self, obj: &simd_json::tape::Object<'_, '_>) -> Result<()> {
+        if let Some(v) = obj.get("addressTableLookups") {
+            let v = v.as_array().context("address table lookups as array")?;
+
+            let atl_builder = self.transactions.address_table_lookups.0.values();
+
+            for v in v.iter() {
+                let v = v.as_object().context("address table lookup as object")?;
+
+                let account_key = get_tape_base58(&v, "accountKey")?;
+                atl_builder
+                    .field_builder::<builder::BinaryBuilder>(0)
+                    .unwrap()
+                    .append_option(account_key);
+
+                {
+                    let b = atl_builder
+                        .field_builder::<builder::ListBuilder<builder::UInt64Builder>>(1)
+                        .unwrap();
+
+                    let v = get_tape_array_of_u64(&v, "writeableIndexes")?;
+                    b.append_option(v.map(|v| v.into_iter().map(Some)));
+                }
+                {
+                    let b = atl_builder
+                        .field_builder::<builder::ListBuilder<builder::UInt64Builder>>(0)
+                        .unwrap();
+
+                    let v = get_tape_array_of_u64(&v, "readonlyIndexes")?;
+                    b.append_option(v.map(|v| v.into_iter().map(Some)));
+                }
+
+                atl_builder.append(true);
+            }
+
+            self.transactions.address_table_lookups.0.append(true);
+        } else {
+            self.transactions.address_table_lookups.0.append_null();
+        }
+
+        Ok(())
+    }
+
     fn parse_logs(
         &mut self,
         block_info: &BlockInfo,
@@ -616,6 +767,28 @@ fn get_tape_array_of_base58(
     Ok(Some(out))
 }
 
+fn get_tape_version(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<i8>> {
+    let val = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+
+    if val.as_str() == Some("legacy") {
+        return Ok(Some(-1));
+    }
+
+    let val = val
+        .as_i8()
+        .with_context(|| format!("{} as i8 version", name))?;
+
+    if val < 0 {
+        return Err(anyhow!("invalid version column {} value: {}", name, val));
+    }
+
+    Ok(Some(val))
+}
+
 fn get_tape_u8(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u8>> {
     let val = match obj.get(name) {
         None => return Ok(None),
@@ -624,6 +797,17 @@ fn get_tape_u8(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Opti
     };
     val.as_u8()
         .with_context(|| format!("{} as u8", name))
+        .map(Some)
+}
+
+fn get_tape_bool(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<bool>> {
+    let val = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+    val.as_bool()
+        .with_context(|| format!("{} as bool", name))
         .map(Some)
 }
 
@@ -656,7 +840,7 @@ fn get_tape_u32(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Opt
         Some(v) => v,
     };
     val.as_u32()
-        .with_context(|| format!("get {} as u64", name))
+        .with_context(|| format!("get {} as u32", name))
         .map(Some)
 }
 
@@ -667,7 +851,7 @@ fn get_tape_u16(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Opt
         Some(v) => v,
     };
     val.as_u16()
-        .with_context(|| format!("get {} as u64", name))
+        .with_context(|| format!("get {} as u16", name))
         .map(Some)
 }
 
@@ -678,7 +862,7 @@ fn get_tape_i64(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Opt
         Some(v) => v,
     };
     val.as_i64()
-        .with_context(|| format!("get {} as u64", name))
+        .with_context(|| format!("get {} as i64", name))
         .map(Some)
 }
 
@@ -691,6 +875,6 @@ fn get_tape_base58(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<
     let hex = hex.as_str().with_context(|| format!("{} as str", name))?;
 
     decode_base58(hex)
-        .with_context(|| format!("prefix_hex_decode {}", name))
+        .with_context(|| format!("decode_base58({})", name))
         .map(Some)
 }
