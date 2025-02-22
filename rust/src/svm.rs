@@ -619,12 +619,12 @@ impl ArrowResponseParser {
         let v = match obj.get("loadedAddresses") {
             Some(v) if v.is_null() => {
                 self.transactions.loaded_readonly_addresses.append_null();
-                self.transactions.loaded_writeable_addresses.append_null();
+                self.transactions.loaded_writable_addresses.append_null();
                 return Ok(());
             }
             None => {
                 self.transactions.loaded_readonly_addresses.append_null();
-                self.transactions.loaded_writeable_addresses.append_null();
+                self.transactions.loaded_writable_addresses.append_null();
                 return Ok(());
             }
             Some(v) => v,
@@ -636,10 +636,10 @@ impl ArrowResponseParser {
         self.transactions
             .loaded_readonly_addresses
             .append_value(readonly.into_iter().map(Some));
-        let writeable = get_tape_array_of_base58(&v, "writeable")?.context("writeable is null")?;
+        let writable = get_tape_array_of_base58(&v, "writable")?.context("writable is null")?;
         self.transactions
-            .loaded_writeable_addresses
-            .append_value(writeable.into_iter().map(Some));
+            .loaded_writable_addresses
+            .append_value(writable.into_iter().map(Some));
 
         Ok(())
     }
@@ -664,7 +664,7 @@ impl ArrowResponseParser {
                         .field_builder::<builder::ListBuilder<builder::UInt64Builder>>(1)
                         .unwrap();
 
-                    let v = get_tape_array_of_u64(&v, "writeableIndexes")?;
+                    let v = get_tape_array_of_u64(&v, "writableIndexes")?;
                     b.append_option(v.map(|v| v.into_iter().map(Some)));
                 }
                 {
@@ -715,7 +715,7 @@ impl ArrowResponseParser {
             self.logs.log_index.append_option(log_index);
             self.logs
                 .instruction_address
-                .append_option(instruction_address);
+                .append_option(instruction_address.map(|v| v.into_iter().map(Some)));
             self.logs.program_id.append_option(program_id);
             self.logs.kind.append_option(kind);
             self.logs.message.append_option(message);
@@ -983,16 +983,16 @@ fn get_tape_version(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result
     };
 
     if val.as_str() == Some("legacy") {
-        return Ok(Some(-1));
+        return Ok(Some(i8::MIN));
     }
 
     let val = val
         .as_i8()
         .with_context(|| format!("{} as i8 version", name))?;
 
-    if val < 0 {
-        return Err(anyhow!("invalid version column {} value: {}", name, val));
-    }
+    // if val < 0 {
+    //     return Err(anyhow!("invalid version column {} value: {}", name, val));
+    // }
 
     Ok(Some(val))
 }
