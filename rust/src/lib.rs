@@ -550,16 +550,16 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        let tx_hash = arrow_data
-            .transactions
-            .column_by_name("block_slot")
+        let timestamp = arrow_data
+            .blocks
+            .column_by_name("timestamp")
             .unwrap()
             .as_any()
-            .downcast_ref::<arrow::array::UInt64Array>()
+            .downcast_ref::<arrow::array::Int64Array>()
             .unwrap();
 
-        for hash in tx_hash.iter().flatten() {
-            dbg!(hash.to_string());
+        for t in timestamp.iter().flatten() {
+            dbg!(t);
         }
 
         // dbg!(arrow_data);

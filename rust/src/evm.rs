@@ -895,7 +895,7 @@ fn decode_prefixed_hex(val: &str) -> Result<Vec<u8>> {
 }
 
 fn decode_hex(hex: &str) -> Result<Vec<u8>> {
-    let len = hex.as_bytes().len();
+    let len = hex.len();
     let mut dst = vec![0; len / 2];
 
     faster_hex::hex_decode(hex.as_bytes(), &mut dst)?;
