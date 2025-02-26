@@ -150,6 +150,7 @@ impl Client {
                         }
                         tokio::time::sleep(Duration::from_millis(config.head_poll_interval_millis))
                             .await;
+                        log::debug!("waiting for block {}", query.from_block);
                         continue;
                     }
                 };
@@ -244,6 +245,7 @@ impl Client {
                         }
                         tokio::time::sleep(Duration::from_millis(config.head_poll_interval_millis))
                             .await;
+                        log::debug!("waiting for block {}", query.from_block);
                         continue;
                     }
                 };
@@ -346,10 +348,6 @@ impl Client {
 
         let status = res.status();
         if !status.is_success() {
-            if status == StatusCode::NO_CONTENT {
-                return Ok(None);
-            }
-
             let text = res.text().await.context("read text to see error")?;
 
             return Err(anyhow!(
@@ -357,6 +355,8 @@ impl Client {
                 status,
                 text
             ));
+        } else if status == StatusCode::NO_CONTENT {
+            return Ok(None);
         }
 
         res.bytes()
@@ -369,6 +369,50 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn continuous_stream_evm() {
+        let url = "https://portal.sqd.dev/datasets/ethereum-mainnet"
+            .parse()
+            .unwrap();
+        let client = Client::new(url, ClientConfig::default());
+
+        let height = client.finalized_height().await.unwrap();
+
+        let query = evm::Query {
+            from_block: height,
+            include_all_blocks: true,
+            fields: evm::Fields {
+                block: evm::BlockFields {
+                    number: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            // fields: evm::Fields::all(),
+            ..Default::default()
+        };
+
+        let client = Arc::new(client);
+
+        let mut receiver = client.evm_arrow_finalized_stream(query, StreamConfig::default());
+
+        while let Some(arrow_data) = receiver.recv().await {
+            let arrow_data = arrow_data.unwrap();
+            let block_num = arrow_data
+                .blocks
+                .column_by_name("number")
+                .unwrap()
+                .as_any()
+                .downcast_ref::<arrow::array::UInt64Array>()
+                .unwrap();
+
+            for num in block_num.iter().flatten() {
+                dbg!(num);
+            }
+        }
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]

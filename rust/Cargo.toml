@@ -1,6 +1,6 @@
 [package]
 name = "sqd-portal-client"
-version = "0.0.10"
+version = "0.0.11"
 edition = "2021"
 description = "client for querying SQD portals"
 homepage = "https://github.com/steelcake/sqd-portal-client"
@@ -25,6 +25,10 @@ ruint = "1"
 futures-lite = "2"
 async-stream = "0.3"
 bs58 = "0.5"
+
+# workaround for https://github.com/apache/arrow-rs/issues/7196
+# until fix is released to crates.io
+chrono = "=0.4.39"
 
 [dependencies.reqwest]
 version = "=0.12.9"
