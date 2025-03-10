@@ -1,6 +1,6 @@
 [package]
 name = "sqd-portal-client"
-version = "0.0.12"
+version = "0.0.13"
 edition = "2021"
 description = "client for querying SQD portals"
 homepage = "https://github.com/steelcake/sqd-portal-client"
@@ -9,25 +9,23 @@ authors = ["Ozgur Akkurt <oezgurmakkurt@gmail.com>"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-anyhow = { workspace = true }
-arrow = { workspace = true }
-cherry-evm-schema = { workspace = true }
-cherry-svm-schema = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
-log = { workspace = true }
-rand = { workspace = true } 
-tokio = { workspace = true, features = ["sync"] }
 simd-json = "0.14"
 bytes = "1" 
 faster-hex = "0.10"
 futures-lite = "2"
 async-stream = "0.3"
 bs58 = "0.5"
-
-# workaround for https://github.com/apache/arrow-rs/issues/7196
-# until fix is released to crates.io
-chrono = "=0.4.39"
+alloy-primitives = "0.8"
+arrow = "54"
+anyhow = "1"
+log = "0.4"
+cherry-evm-schema = "0.0.4"
+cherry-svm-schema = "0.0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = "0.8"
+tokio = { version = "1", default-features = false, features = ["sync"] }
+ruint = "1"
 
 [dependencies.reqwest]
 version = "=0.12.9"
@@ -36,5 +34,5 @@ default-features = false
 features = ["rustls-tls", "gzip"]
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["full"]}
+tokio = { version = "1", features = ["full"]}
 

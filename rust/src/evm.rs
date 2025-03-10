@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use arrow::array::UInt64Array;
 use arrow::{datatypes::i256, record_batch::RecordBatch};
 use cherry_evm_schema::{BlocksBuilder, LogsBuilder, TracesBuilder, TransactionsBuilder};
@@ -438,26 +438,26 @@ impl ArrowResponseParser {
             let revert_reason = get_tape_string(&trace, "revert_reason")?;
             let create_from = get_tape_hex(&trace, "createFrom")?;
             let create_to = get_tape_hex(&trace, "createTo")?;
-            let create_gas = get_tape_i256(&trace, "createGas")?;
+            let create_gas = get_tape_u256(&trace, "createGas")?;
             let create_init = get_tape_hex(&trace, "createInit")?;
-            let create_result_gas_used = get_tape_i256(&trace, "createResultGasUsed")?;
+            let create_result_gas_used = get_tape_u256(&trace, "createResultGasUsed")?;
             let create_result_code = get_tape_hex(&trace, "createResultCode")?;
             let create_result_address = get_tape_hex(&trace, "createResultAddress")?;
             let call_from = get_tape_hex(&trace, "callFrom")?;
             let call_to = get_tape_hex(&trace, "callTo")?;
-            let call_value = get_tape_i256(&trace, "callValue")?;
-            let call_gas = get_tape_i256(&trace, "callGas")?;
+            let call_value = get_tape_u256(&trace, "callValue")?;
+            let call_gas = get_tape_u256(&trace, "callGas")?;
             let call_input = get_tape_hex(&trace, "callInput")?;
             let call_sighash = get_tape_hex(&trace, "callSighash")?;
             let call_type = get_tape_string(&trace, "callType")?;
             let call_call_type = get_tape_string(&trace, "callCallType")?;
-            let call_result_gas_used = get_tape_i256(&trace, "callResultGasUsed")?;
+            let call_result_gas_used = get_tape_u256(&trace, "callResultGasUsed")?;
             let call_result_output = get_tape_hex(&trace, "callResultOutput")?;
             let suicide_address = get_tape_hex(&trace, "suicideAddress")?;
             let suicide_refund_address = get_tape_hex(&trace, "suicideRefundAddress")?;
-            let suicide_balance = get_tape_i256(&trace, "suicideBalance")?;
+            let suicide_balance = get_tape_u256(&trace, "suicideBalance")?;
             let reward_author = get_tape_hex(&trace, "rewardAuthor")?;
-            let reward_value = get_tape_i256(&trace, "rewardValue")?;
+            let reward_value = get_tape_u256(&trace, "rewardValue")?;
             let reward_type = get_tape_string(&trace, "rewardType")?;
 
             self.traces.from.append_option(create_from.or(call_from));
@@ -569,32 +569,32 @@ impl ArrowResponseParser {
             let from = get_tape_hex(&tx, "from")?;
             let to = get_tape_hex(&tx, "to")?;
             let input = get_tape_hex(&tx, "input")?;
-            let value = get_tape_i256(&tx, "value")?;
-            let gas = get_tape_i256(&tx, "gas")?;
-            let gas_price = get_tape_i256(&tx, "gasPrice")?;
-            let max_fee_per_gas = get_tape_i256(&tx, "maxFeePerGas")?;
-            let max_priority_fee_per_gas = get_tape_i256(&tx, "maxPriorityFeePerGas")?;
-            let v = get_tape_i256(&tx, "v")?;
-            let r = get_tape_i256(&tx, "r")?;
-            let s = get_tape_i256(&tx, "s")?;
+            let value = get_tape_u256(&tx, "value")?;
+            let gas = get_tape_u256(&tx, "gas")?;
+            let gas_price = get_tape_u256(&tx, "gasPrice")?;
+            let max_fee_per_gas = get_tape_u256(&tx, "maxFeePerGas")?;
+            let max_priority_fee_per_gas = get_tape_u256(&tx, "maxPriorityFeePerGas")?;
+            let v = get_tape_u8_hex(&tx, "v")?;
+            let r = get_tape_hex(&tx, "r")?;
+            let s = get_tape_hex(&tx, "s")?;
             let y_parity = get_tape_u8(&tx, "yParity")?;
             let chain_id = get_tape_u64(&tx, "chainId")?;
             let sighash = get_tape_hex(&tx, "sighash")?;
             let contract_address = get_tape_hex(&tx, "contractAddress")?;
-            let gas_used = get_tape_i256(&tx, "gasUsed")?;
-            let cumulative_gas_used = get_tape_i256(&tx, "cumulativeGasUsed")?;
-            let effective_gas_price = get_tape_i256(&tx, "effectiveGasPrice")?;
+            let gas_used = get_tape_u256(&tx, "gasUsed")?;
+            let cumulative_gas_used = get_tape_u256(&tx, "cumulativeGasUsed")?;
+            let effective_gas_price = get_tape_u256(&tx, "effectiveGasPrice")?;
             let type_ = get_tape_u8(&tx, "type")?;
             let status = get_tape_u8(&tx, "status")?;
-            let max_fee_per_blob_gas = get_tape_i256(&tx, "maxFeePerBlobGas")?;
+            let max_fee_per_blob_gas = get_tape_u256(&tx, "maxFeePerBlobGas")?;
             let blob_versioned_hashes = get_tape_array_of_hex(&tx, "blobVersionedHashes")?;
-            let l1_fee = get_tape_i256(&tx, "l1Fee")?;
-            let l1_fee_scalar = get_tape_i256(&tx, "l1FeeScalar")?;
-            let l1_gas_price = get_tape_i256(&tx, "l1GasPrice")?;
-            let l1_gas_used = get_tape_i256(&tx, "l1GasUsed")?;
-            let l1_blob_base_fee = get_tape_i256(&tx, "l1BlobBaseFee")?;
-            let l1_blob_base_fee_scalar = get_tape_i256(&tx, "l1BlobBaseFeeScalar")?;
-            let l1_base_fee_scalar = get_tape_i256(&tx, "l1BaseFeeScalar")?;
+            let l1_fee = get_tape_u256(&tx, "l1Fee")?;
+            let l1_fee_scalar = get_tape_u256(&tx, "l1FeeScalar")?;
+            let l1_gas_price = get_tape_u256(&tx, "l1GasPrice")?;
+            let l1_gas_used = get_tape_u256(&tx, "l1GasUsed")?;
+            let l1_blob_base_fee = get_tape_u256(&tx, "l1BlobBaseFee")?;
+            let l1_blob_base_fee_scalar = get_tape_u256(&tx, "l1BlobBaseFeeScalar")?;
+            let l1_base_fee_scalar = get_tape_u256(&tx, "l1BaseFeeScalar")?;
 
             self.transactions
                 .block_hash
@@ -699,13 +699,13 @@ impl ArrowResponseParser {
         let nonce = get_tape_hex(header, "nonce")?;
         let mix_hash = get_tape_hex(header, "mixHash")?;
         let size = get_tape_u64(header, "size")?;
-        let gas_limit = get_tape_i256(header, "gasLimit")?;
-        let gas_used = get_tape_i256(header, "gasUsed")?;
-        let difficulty = get_tape_i256(header, "difficulty")?;
-        let total_difficulty = get_tape_i256(header, "totalDifficulty")?;
-        let base_fee_per_gas = get_tape_i256(header, "baseFeePerGas")?;
-        let blob_gas_used = get_tape_i256(header, "blobGasUsed")?;
-        let excess_blob_gas = get_tape_i256(header, "excessBlobGas")?;
+        let gas_limit = get_tape_u256(header, "gasLimit")?;
+        let gas_used = get_tape_u256(header, "gasUsed")?;
+        let difficulty = get_tape_u256(header, "difficulty")?;
+        let total_difficulty = get_tape_u256(header, "totalDifficulty")?;
+        let base_fee_per_gas = get_tape_u256(header, "baseFeePerGas")?;
+        let blob_gas_used = get_tape_u256(header, "blobGasUsed")?;
+        let excess_blob_gas = get_tape_u256(header, "excessBlobGas")?;
         let l1_block_number = get_tape_u64(header, "l1BlockNumber")?;
 
         self.blocks.number.append_option(number);
@@ -813,6 +813,21 @@ fn get_tape_array_of_hex(
     Ok(Some(out))
 }
 
+fn get_tape_u8_hex(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u8>> {
+    let hex = get_tape_hex(obj, name).context("get_tape_hex")?;
+
+    hex.map(|v| u8_from_be_slice(&v).with_context(|| format!("parse u8 from {}", name)))
+        .transpose()
+}
+
+fn u8_from_be_slice(data: &[u8]) -> Result<u8> {
+    let num = ruint::aliases::U256::try_from_be_slice(data).context("parse ruint u256")?;
+    let num = alloy_primitives::I256::try_from(num)
+        .with_context(|| format!("u256 to i256. val was {}", num))?;
+    let num = u8::try_from(num).context("try to u8")?;
+    Ok(num)
+}
+
 fn get_tape_u8(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u8>> {
     let val = match obj.get(name) {
         None => return Ok(None),
@@ -835,22 +850,19 @@ fn get_tape_string(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<
         .map(|x| Some(x.to_owned()))
 }
 
-fn get_tape_i256(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<i256>> {
+fn get_tape_u256(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<i256>> {
     let hex = get_tape_hex(obj, name).context("get_tape_hex")?;
 
-    hex.map(|v| i256_from_be_slice(&v).with_context(|| format!("parse i256 from {}", name)))
+    hex.map(|v| u256_from_be_slice(&v).with_context(|| format!("parse i256 from {}", name)))
         .transpose()
 }
 
-fn i256_from_be_slice(data: &[u8]) -> Result<i256> {
-    if data.len() > 32 {
-        return Err(anyhow!("data is bigger than 32 bytes"));
-    }
+fn u256_from_be_slice(data: &[u8]) -> Result<i256> {
+    let num = ruint::aliases::U256::try_from_be_slice(data).context("parse ruint u256")?;
+    let num = alloy_primitives::I256::try_from(num)
+        .with_context(|| format!("u256 to i256. val was {}", num))?;
 
-    let mut bytes = [0; 32];
-    bytes[32 - data.len()..].copy_from_slice(data);
-
-    let val = i256::from_be_bytes(bytes);
+    let val = i256::from_be_bytes(num.to_be_bytes::<32>());
 
     Ok(val)
 }
