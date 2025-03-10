@@ -852,10 +852,6 @@ fn i256_from_be_slice(data: &[u8]) -> Result<i256> {
 
     let val = i256::from_be_bytes(bytes);
 
-    if val.is_negative() {
-        return Err(anyhow!("value was out of range"));
-    }
-
     Ok(val)
 }
 

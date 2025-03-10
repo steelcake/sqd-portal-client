@@ -21,7 +21,6 @@ tokio = { workspace = true, features = ["sync"] }
 simd-json = "0.14"
 bytes = "1" 
 faster-hex = "0.10"
-ruint = "1"
 futures-lite = "2"
 async-stream = "0.3"
 bs58 = "0.5"

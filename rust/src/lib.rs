@@ -509,6 +509,45 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
+    async fn full_evm_query() {
+        let url = "https://portal.sqd.dev/datasets/ethereum-mainnet"
+            .parse()
+            .unwrap();
+        let client = Client::new(url, ClientConfig::default());
+
+        let query = evm::Query {
+            from_block: 0,
+            to_block: None,
+            logs: vec![evm::LogRequest::default()],
+            transactions: vec![evm::TransactionRequest::default()],
+            traces: vec![evm::TraceRequest::default()],
+            include_all_blocks: true,
+            fields: evm::Fields::all(),
+            ..Default::default()
+        };
+
+        let client = Arc::new(client);
+
+        let mut receiver = client.evm_arrow_finalized_stream(query, StreamConfig::default());
+
+        while let Some(arrow_data) = receiver.recv().await {
+            let arrow_data = arrow_data.unwrap();
+            let tx_hash = arrow_data
+                .transactions
+                .column_by_name("value")
+                .unwrap()
+                .as_any()
+                .downcast_ref::<arrow::array::Decimal256Array>()
+                .unwrap();
+
+            for hash in tx_hash.iter().flatten() {
+                dbg!(hash.to_string());
+            }
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
     async fn dummy_stream() {
         let url = "https://portal.sqd.dev/datasets/zksync-mainnet"
             .parse()
