@@ -350,8 +350,8 @@ impl RewardFields {
 pub struct BlockFields {
     pub number: bool,
     pub hash: bool,
-    // pub parent_slot: bool,
-    // pub parent_hash: bool,
+    pub parent_number: bool,
+    pub parent_hash: bool,
     pub timestamp: bool,
 }
 
@@ -360,8 +360,8 @@ impl BlockFields {
         BlockFields {
             number: true,
             hash: true,
-            // parent_slot: true,
-            // parent_hash: true,
+            parent_number: true,
+            parent_hash: true,
             timestamp: true,
         }
     }
@@ -856,21 +856,17 @@ impl ArrowResponseParser {
     fn parse_header(&mut self, header: &simd_json::tape::Object<'_, '_>) -> Result<BlockInfo> {
         let slot = get_tape_u64(header, "number")?;
         let hash = get_tape_base58(header, "hash")?;
-        // let parent_slot = get_tape_u64(header, "parentSlot")?;
-        // let parent_hash = get_tape_base58(header, "parentHash")?;
-        // let height = get_tape_u64(header, "height")?;
+        let parent_slot = get_tape_u64(header, "parentNumber")?;
+        let parent_hash = get_tape_base58(header, "parentHash")?;
+        let height = get_tape_u64(header, "height")?;
         let timestamp = get_tape_i64(header, "timestamp")?;
 
         self.blocks.slot.append_option(slot);
         self.blocks.hash.append_option(hash.as_ref());
-        // self.blocks.parent_slot.append_option(parent_slot);
-        // self.blocks.parent_hash.append_option(parent_hash);
-        // self.blocks.height.append_option(height);
+        self.blocks.parent_slot.append_option(parent_slot);
+        self.blocks.parent_hash.append_option(parent_hash);
+        self.blocks.height.append_option(height);
         self.blocks.timestamp.append_option(timestamp);
-        self.blocks.parent_slot.append_null();
-        self.blocks.parent_hash.append_null();
-        self.blocks.height.append_null();
-        // self.blocks.timestamp.append_null();
 
         Ok(BlockInfo { slot, hash })
     }

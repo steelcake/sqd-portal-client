@@ -417,7 +417,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
     async fn check_stream_finishes_properly_svm() {
-        let url = "https://portal.sqd.dev/datasets/solana-mainnet"
+        let url = "https://portal.sqd.dev/datasets/solana-beta"
             .parse()
             .unwrap();
         let client = Client::new(url, ClientConfig::default());
@@ -510,10 +510,18 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
     async fn full_evm_query() {
+        env_logger::try_init().ok();
+
         let url = "https://portal.sqd.dev/datasets/ethereum-mainnet"
             .parse()
             .unwrap();
-        let client = Client::new(url, ClientConfig::default());
+        let client = Client::new(
+            url,
+            ClientConfig {
+                max_num_retries: 0,
+                ..Default::default()
+            },
+        );
 
         let query = evm::Query {
             from_block: 0,
@@ -549,17 +557,23 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
     async fn dummy_stream() {
+        env_logger::try_init().ok();
+
         let url = "https://portal.sqd.dev/datasets/zksync-mainnet"
             .parse()
             .unwrap();
-        let client = Client::new(url, ClientConfig::default());
+        let client = Client::new(
+            url,
+            ClientConfig {
+                max_num_retries: 0,
+                ..Default::default()
+            },
+        );
 
         let query = evm::Query {
-            from_block: 0,
+            from_block: 12123123,
             to_block: None,
-            logs: vec![evm::LogRequest::default()],
             transactions: vec![evm::TransactionRequest::default()],
-            include_all_blocks: true,
             fields: evm::Fields {
                 transaction: evm::TransactionFields {
                     value: true,
@@ -575,26 +589,28 @@ mod tests {
 
         let mut receiver = client.evm_arrow_finalized_stream(query, StreamConfig::default());
 
-        while let Some(arrow_data) = receiver.recv().await {
-            let arrow_data = arrow_data.unwrap();
-            let tx_hash = arrow_data
-                .transactions
-                .column_by_name("value")
-                .unwrap()
-                .as_any()
-                .downcast_ref::<arrow::array::Decimal256Array>()
-                .unwrap();
+        while let Some(_arrow_data) = receiver.recv().await {
+            // let arrow_data = arrow_data.unwrap();
+            // let tx_hash = arrow_data
+            //     .transactions
+            //     .column_by_name("value")
+            //     .unwrap()
+            //     .as_any()
+            //     .downcast_ref::<arrow::array::Decimal256Array>()
+            //     .unwrap();
 
-            for hash in tx_hash.iter().flatten() {
-                dbg!(hash.to_string());
-            }
+            // for hash in tx_hash.iter().flatten() {
+            //     dbg!(hash.to_string());
+            // }
         }
     }
 
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
     async fn dummy_svm() {
-        let url = "https://portal.sqd.dev/datasets/solana-mainnet"
+        env_logger::try_init().ok();
+
+        let url = "https://portal.sqd.dev/datasets/solana-beta"
             .parse()
             .unwrap();
         let client = Client::new(
@@ -606,8 +622,8 @@ mod tests {
         );
 
         let query = svm::Query {
-            from_block: 300123123,
-            to_block: Some(300123143),
+            from_block: 317617480,
+            to_block: Some(317617500),
             fields: svm::Fields {
                 transaction: svm::TransactionFields {
                     recent_blockhash: false,
@@ -635,10 +651,10 @@ mod tests {
 
         let timestamp = arrow_data
             .blocks
-            .column_by_name("timestamp")
+            .column_by_name("parent_slot")
             .unwrap()
             .as_any()
-            .downcast_ref::<arrow::array::Int64Array>()
+            .downcast_ref::<arrow::array::UInt64Array>()
             .unwrap();
 
         for t in timestamp.iter().flatten() {

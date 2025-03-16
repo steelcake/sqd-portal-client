@@ -1,6 +1,6 @@
 [package]
 name = "sqd-portal-client"
-version = "0.0.13"
+version = "0.0.14"
 edition = "2021"
 description = "client for querying SQD portals"
 homepage = "https://github.com/steelcake/sqd-portal-client"
@@ -28,11 +28,11 @@ tokio = { version = "1", default-features = false, features = ["sync"] }
 ruint = "1"
 
 [dependencies.reqwest]
-version = "=0.12.9"
-# git = "https://github.com/seanmonstar/reqwest"
+version = "0.12"
 default-features = false
 features = ["rustls-tls", "gzip"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"]}
+env_logger = "0.11"
 
