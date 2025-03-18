@@ -423,8 +423,8 @@ mod tests {
         let client = Client::new(url, ClientConfig::default());
 
         let query = svm::Query {
-            from_block: 300123123,
-            to_block: Some(300123143),
+            from_block: 317617480,
+            to_block: Some(317617500),
             fields: svm::Fields {
                 transaction: svm::TransactionFields {
                     recent_blockhash: false,

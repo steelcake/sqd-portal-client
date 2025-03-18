@@ -773,7 +773,7 @@ impl ArrowResponseParser {
             let obj = obj.as_object().context("reward as object")?;
 
             let pubkey = get_tape_base58(&obj, "pubkey")?;
-            let lamports = get_tape_bigint(&obj, "lamports")?;
+            let lamports = get_tape_bigint_i64(&obj, "lamports")?;
             let post_balance = get_tape_bigint(&obj, "postBalance")?;
             let reward_type = get_tape_string(&obj, "rewardType")?;
             let commission = get_tape_u8(&obj, "commission")?;
@@ -1073,6 +1073,23 @@ fn get_tape_json_string(
     };
 
     Ok(Some(val.encode()))
+}
+
+fn get_tape_bigint_i64(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<i64>> {
+    let val = match obj.get(name) {
+        None => return Ok(None),
+        Some(v) if v.is_null() => return Ok(None),
+        Some(v) => v,
+    };
+
+    let val = val
+        .as_str()
+        .with_context(|| format!("get {} as str", name))?;
+
+    Ok(Some(
+        val.parse()
+            .with_context(|| format!("parse {} as i64", name))?,
+    ))
 }
 
 fn get_tape_bigint(obj: &simd_json::tape::Object<'_, '_>, name: &str) -> Result<Option<u64>> {
