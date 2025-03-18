@@ -572,6 +572,13 @@ impl ArrowResponseParser {
             self.transactions
                 .transaction_index
                 .append_option(transaction_index);
+
+            if let Some(sigs) = signatures.as_ref() {
+                self.transactions.signature.append_option(sigs.first());
+            } else {
+                self.transactions.signature.append_null();
+            }
+
             self.transactions.version.append_option(version);
             self.transactions
                 .account_keys
