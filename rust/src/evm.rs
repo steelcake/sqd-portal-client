@@ -481,6 +481,20 @@ impl ArrowResponseParser {
                 self.traces.action_address.append_null();
                 self.traces.balance.append_option(balance);
                 self.traces.refund_address.append_option(refund_address);
+            } else {
+                self.traces.from.append_null();
+                self.traces.to.append_null();
+                self.traces.call_type.append_null();
+                self.traces.gas.append_null();
+                self.traces.input.append_null();
+                self.traces.init.append_null();
+                self.traces.value.append_null();
+                self.traces.author.append_null();
+                self.traces.reward_type.append_null();
+                self.traces.sighash.append_null();
+                self.traces.action_address.append_null();
+                self.traces.balance.append_null();
+                self.traces.refund_address.append_null();
             }
 
             if let Some(result) = trace.get("result") {
@@ -495,6 +509,11 @@ impl ArrowResponseParser {
                 self.traces.code.append_option(code);
                 self.traces.gas_used.append_option(gas_used);
                 self.traces.output.append_option(output);
+            } else {
+                self.traces.address.append_null();
+                self.traces.code.append_null();
+                self.traces.gas_used.append_null();
+                self.traces.output.append_null();
             }
         }
 
