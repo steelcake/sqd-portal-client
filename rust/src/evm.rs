@@ -432,55 +432,15 @@ impl ArrowResponseParser {
 
             let transaction_index = get_tape_u64(&trace, "transactionIndex")?;
             let trace_address = get_tape_array_of_u64(&trace, "traceAddress")?;
-            let subtraces = get_tape_u64(&trace, "subtraces")?;
             let type_ = get_tape_string(&trace, "type")?;
+            let subtraces = get_tape_u64(&trace, "subtraces")?;
             let error = get_tape_string(&trace, "error")?;
-            let revert_reason = get_tape_string(&trace, "revert_reason")?;
-            let create_from = get_tape_hex(&trace, "createFrom")?;
-            let create_to = get_tape_hex(&trace, "createTo")?;
-            let create_gas = get_tape_u256(&trace, "createGas")?;
-            let create_init = get_tape_hex(&trace, "createInit")?;
-            let create_result_gas_used = get_tape_u256(&trace, "createResultGasUsed")?;
-            let create_result_code = get_tape_hex(&trace, "createResultCode")?;
-            let create_result_address = get_tape_hex(&trace, "createResultAddress")?;
-            let call_from = get_tape_hex(&trace, "callFrom")?;
-            let call_to = get_tape_hex(&trace, "callTo")?;
-            let call_value = get_tape_u256(&trace, "callValue")?;
-            let call_gas = get_tape_u256(&trace, "callGas")?;
-            let call_input = get_tape_hex(&trace, "callInput")?;
-            let call_sighash = get_tape_hex(&trace, "callSighash")?;
-            let call_type = get_tape_string(&trace, "callType")?;
-            let call_call_type = get_tape_string(&trace, "callCallType")?;
-            let call_result_gas_used = get_tape_u256(&trace, "callResultGasUsed")?;
-            let call_result_output = get_tape_hex(&trace, "callResultOutput")?;
-            let suicide_address = get_tape_hex(&trace, "suicideAddress")?;
-            let suicide_refund_address = get_tape_hex(&trace, "suicideRefundAddress")?;
-            let suicide_balance = get_tape_u256(&trace, "suicideBalance")?;
-            let reward_author = get_tape_hex(&trace, "rewardAuthor")?;
-            let reward_value = get_tape_u256(&trace, "rewardValue")?;
-            let reward_type = get_tape_string(&trace, "rewardType")?;
+            let revert_reason = get_tape_string(&trace, "revertReason")?;
 
-            self.traces.from.append_option(create_from.or(call_from));
-            self.traces.to.append_option(create_to.or(call_to));
-            self.traces
-                .call_type
-                .append_option(call_type.or(call_call_type));
-            self.traces.gas.append_option(create_gas.or(call_gas));
-            self.traces.input.append_option(call_input);
-            self.traces.init.append_option(create_init);
-            self.traces.value.append_option(call_value.or(reward_value));
-            self.traces.author.append_option(reward_author);
-            self.traces.reward_type.append_option(reward_type);
             self.traces
                 .block_hash
                 .append_option(block_info.hash.clone());
             self.traces.block_number.append_option(block_info.number);
-            self.traces.address.append_option(create_result_address);
-            self.traces.code.append_option(create_result_code);
-            self.traces
-                .gas_used
-                .append_option(create_result_gas_used.or(call_result_gas_used));
-            self.traces.output.append_option(call_result_output);
             self.traces.subtraces.append_option(subtraces);
             self.traces
                 .trace_address
@@ -491,12 +451,51 @@ impl ArrowResponseParser {
                 .append_option(transaction_index);
             self.traces.type_.append_option(type_);
             self.traces.error.append_option(error.or(revert_reason));
-            self.traces.sighash.append_option(call_sighash);
-            self.traces.action_address.append_option(suicide_address);
-            self.traces.balance.append_option(suicide_balance);
-            self.traces
-                .refund_address
-                .append_option(suicide_refund_address);
+
+            if let Some(action) = trace.get("action") {
+                let action = action.as_object().context("tx.action as object")?;
+
+                let from = get_tape_hex(&action, "from")?;
+                let to = get_tape_hex(&action, "to")?;
+                let value = get_tape_u256(&action, "value")?;
+                let gas = get_tape_u256(&action, "gas")?;
+                let input = get_tape_hex(&action, "input")?;
+                let sighash = get_tape_hex(&action, "sighash")?;
+                let call_type = get_tape_string(&action, "type")?;
+                let init = get_tape_hex(&trace, "init")?;
+                let refund_address = get_tape_hex(&trace, "refundAddress")?;
+                let balance = get_tape_u256(&trace, "balance")?;
+                let reward_author = get_tape_hex(&trace, "rewardAuthor")?;
+                let reward_type = get_tape_string(&trace, "type")?;
+
+                self.traces.from.append_option(from);
+                self.traces.to.append_option(to);
+                self.traces.call_type.append_option(call_type);
+                self.traces.gas.append_option(gas);
+                self.traces.input.append_option(input);
+                self.traces.init.append_option(init);
+                self.traces.value.append_option(value);
+                self.traces.author.append_option(reward_author);
+                self.traces.reward_type.append_option(reward_type);
+                self.traces.sighash.append_option(sighash);
+                self.traces.action_address.append_null();
+                self.traces.balance.append_option(balance);
+                self.traces.refund_address.append_option(refund_address);
+            }
+
+            if let Some(result) = trace.get("result") {
+                let result = result.as_object().context("trace.result as object")?;
+
+                let gas_used = get_tape_u256(&result, "gasUsed")?;
+                let code = get_tape_hex(&result, "code")?;
+                let address = get_tape_hex(&result, "address")?;
+                let output = get_tape_hex(&result, "output")?;
+
+                self.traces.address.append_option(address);
+                self.traces.code.append_option(code);
+                self.traces.gas_used.append_option(gas_used);
+                self.traces.output.append_option(output);
+            }
         }
 
         Ok(())

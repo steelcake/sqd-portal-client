@@ -524,8 +524,8 @@ mod tests {
         );
 
         let query = evm::Query {
-            from_block: 0,
-            to_block: None,
+            from_block: 18123123,
+            to_block: Some(18123200),
             logs: vec![evm::LogRequest::default()],
             transactions: vec![evm::TransactionRequest::default()],
             traces: vec![evm::TraceRequest::default()],
@@ -540,16 +540,17 @@ mod tests {
 
         while let Some(arrow_data) = receiver.recv().await {
             let arrow_data = arrow_data.unwrap();
+
             let tx_hash = arrow_data
-                .transactions
-                .column_by_name("value")
+                .traces
+                .column_by_name("from")
                 .unwrap()
                 .as_any()
-                .downcast_ref::<arrow::array::Decimal256Array>()
+                .downcast_ref::<arrow::array::BinaryArray>()
                 .unwrap();
 
             for hash in tx_hash.iter().flatten() {
-                dbg!(hash.to_string());
+                dbg!(faster_hex::hex_string(hash));
             }
         }
     }
