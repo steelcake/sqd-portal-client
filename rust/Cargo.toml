@@ -1,6 +1,6 @@
 [package]
 name = "sqd-portal-client"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 description = "client for querying SQD portals"
 homepage = "https://github.com/steelcake/sqd-portal-client"
@@ -19,8 +19,8 @@ alloy-primitives = "1"
 arrow = "56"
 anyhow = "1"
 log = "0.4"
-cherry-evm-schema = "0.1.0"
-cherry-svm-schema = "0.1.0"
+cherry-evm-schema = "0.2.0"
+cherry-svm-schema = "0.2.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rand = "0.9"
